@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.ImageDecoder
 import android.graphics.Paint
 import android.net.Uri
@@ -15,9 +17,7 @@ import kotlin.math.roundToInt
 
 /**
  * Renders a selected still image into a screen-shaped bitmap.
- *
- * The renderer bounds decoded source dimensions and output dimensions to avoid
- * unbounded allocations when users select very large photographs.
+ * Source and output dimensions are bounded to avoid unbounded allocations.
  */
 object WallpaperImageRenderer {
     private const val MAX_DECODE_EDGE = 4096
@@ -29,7 +29,12 @@ object WallpaperImageRenderer {
         sourceUri: Uri,
         fill: Boolean,
         dim: Float,
-        rotationDegrees: Int
+        rotationDegrees: Int,
+        focusX: Float = 0.5f,
+        focusY: Float = 0.5f,
+        brightness: Float = 0f,
+        contrast: Float = 1f,
+        saturation: Float = 1f
     ): Bitmap {
         val decoded = decode(context, sourceUri)
         try {
@@ -63,9 +68,36 @@ object WallpaperImageRenderer {
             val scaleX = outputWidth.toFloat() / rotatedWidth
             val scaleY = outputHeight.toFloat() / rotatedHeight
             val scale = if (fill) max(scaleX, scaleY) else min(scaleX, scaleY)
-            val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
+            val drawnWidth = rotatedWidth * scale
+            val drawnHeight = rotatedHeight * scale
+            val anchorX = if (fill) focusX.coerceIn(0f, 1f) else 0.5f
+            val anchorY = if (fill) focusY.coerceIn(0f, 1f) else 0.5f
+            val drawLeft = (outputWidth - drawnWidth) * anchorX
+            val drawTop = (outputHeight - drawnHeight) * anchorY
+
+            val safeContrast = contrast.coerceIn(0.5f, 1.5f)
+            val safeSaturation = saturation.coerceIn(0f, 2f)
+            val safeBrightness = brightness.coerceIn(-0.3f, 0.3f)
+            val offset = ((1f - safeContrast) * 128f) + (safeBrightness * 255f)
+            val saturationMatrix = ColorMatrix().apply { setSaturation(safeSaturation) }
+            val toneMatrix = ColorMatrix(
+                floatArrayOf(
+                    safeContrast, 0f, 0f, 0f, offset,
+                    0f, safeContrast, 0f, 0f, offset,
+                    0f, 0f, safeContrast, 0f, offset,
+                    0f, 0f, 0f, 1f, 0f
+                )
+            )
+            val combinedMatrix = ColorMatrix().apply {
+                set(saturationMatrix)
+                postConcat(toneMatrix)
+            }
+            val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG).apply {
+                colorFilter = ColorMatrixColorFilter(combinedMatrix)
+            }
+
             canvas.save()
-            canvas.translate(outputWidth / 2f, outputHeight / 2f)
+            canvas.translate(drawLeft + drawnWidth / 2f, drawTop + drawnHeight / 2f)
             canvas.rotate(normalizedRotation.toFloat())
             canvas.scale(scale, scale)
             canvas.drawBitmap(decoded, -decoded.width / 2f, -decoded.height / 2f, imagePaint)
@@ -110,7 +142,9 @@ object WallpaperImageRenderer {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
             ?: error("Unable to open the selected image.")
-        check(bounds.outWidth > 0 && bounds.outHeight > 0) { "The selected file is not a readable image." }
+        check(bounds.outWidth > 0 && bounds.outHeight > 0) {
+            "The selected file is not a readable image."
+        }
 
         var sampleSize = 1
         while (max(bounds.outWidth, bounds.outHeight) / sampleSize > MAX_DECODE_EDGE) {
@@ -123,5 +157,4 @@ object WallpaperImageRenderer {
         return resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
             ?: error("Unable to decode the selected image.")
     }
-
 }
