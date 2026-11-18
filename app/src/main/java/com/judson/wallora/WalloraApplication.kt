@@ -3,6 +3,7 @@ package com.judson.wallora
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.decode.GifDecoder
 import coil.decode.VideoFrameDecoder
 
 /**
@@ -14,6 +15,7 @@ class WalloraApplication : Application(), ImageLoaderFactory {
         return ImageLoader.Builder(this)
             .components {
                 add(VideoFrameDecoder.Factory())
+                add(GifDecoder.Factory())
             }
             .crossfade(true)
             .build()
