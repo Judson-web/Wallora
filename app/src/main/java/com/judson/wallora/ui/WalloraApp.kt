@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -178,13 +179,14 @@ private fun LibraryScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("All") }
-    val filters = listOf("All", "Images", "Videos", "Favourites")
+    val filters = listOf("All", "Images", "Videos", "GIFs", "Favourites")
     val visibleItems = remember(items, query, filter) {
         items.filter { item ->
             val matchesQuery = item.displayName.contains(query, ignoreCase = true)
             val matchesFilter = when (filter) {
-                "Images" -> item.kind == MediaKind.IMAGE
+                "Images" -> item.kind == MediaKind.IMAGE || item.kind == MediaKind.GIF
                 "Videos" -> item.kind == MediaKind.VIDEO
+                "GIFs" -> item.kind == MediaKind.GIF
                 "Favourites" -> item.isFavorite
                 else -> true
             }
@@ -205,7 +207,10 @@ private fun LibraryScreen(
             shape = RoundedCornerShape(18.dp)
         )
         Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             filters.forEach { label ->
                 FilterChip(selected = filter == label, onClick = { filter = label }, label = { Text(label) })
             }
