@@ -67,6 +67,11 @@ private val FOCAL_COORDINATES = listOf(
     0f to 1f, 0.5f to 1f, 1f to 1f
 )
 private val FOCAL_LABELS = listOf("↖", "↑", "↗", "←", "•", "→", "↙", "↓", "↘")
+private val FOCAL_ROTATION_MAPS = mapOf(
+    90 to listOf(6, 3, 0, 7, 4, 1, 8, 5, 2),
+    180 to listOf(8, 7, 6, 5, 4, 3, 2, 1, 0),
+    270 to listOf(2, 5, 8, 1, 4, 7, 0, 3, 6)
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -450,14 +455,25 @@ private fun StudioScreen(
                     }
                 }
             } else {
-                AsyncImage(
-                    model = selectedItem.uri,
-                    contentDescription = "Wallpaper preview",
-                    modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation.toFloat() },
-                    alignment = FOCAL_ALIGNMENTS[focusIndex],
-                    colorFilter = previewColorFilter,
-                    contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
-                )
+                val normalizedRotation = ((rotation % 360) + 360) % 360
+                val previewFocus = FOCAL_ROTATION_MAPS[normalizedRotation]?.get(focusIndex) ?: focusIndex
+                BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val imageModifier = if (normalizedRotation == 90 || normalizedRotation == 270) {
+                        Modifier.align(Alignment.Center)
+                            .size(width = maxHeight, height = maxWidth)
+                            .graphicsLayer { rotationZ = rotation.toFloat() }
+                    } else {
+                        Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation.toFloat() }
+                    }
+                    AsyncImage(
+                        model = selectedItem.uri,
+                        contentDescription = "Wallpaper preview",
+                        modifier = imageModifier,
+                        alignment = if (fill) FOCAL_ALIGNMENTS[previewFocus] else Alignment.Center,
+                        colorFilter = previewColorFilter,
+                        contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
+                    )
+                }
             }
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
             Surface(
@@ -488,6 +504,11 @@ private fun StudioScreen(
             ) { Text("Fit") }
         }
         Text("Focal position", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Choose which part of the image stays visible when Fill crops it.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             repeat(3) { rowIndex ->
                 Row(
