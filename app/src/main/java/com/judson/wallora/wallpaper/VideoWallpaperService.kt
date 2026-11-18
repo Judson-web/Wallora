@@ -6,13 +6,14 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 
 /**
- * Minimal video live-wallpaper renderer. Production work should add persisted URI
- * selection, decoder capability checks, configurable scaling, frame pacing,
- * audio policy, error recovery and a dedicated settings screen.
+ * Video live-wallpaper renderer with per-video URI, mute, framing, speed and loop settings.
+ * Android/OEM wallpaper services still control whether a preview can be committed.
  */
+@OptIn(UnstableApi::class)
 class VideoWallpaperService : WallpaperService() {
     override fun onCreateEngine(): Engine = VideoEngine()
 
