@@ -4,7 +4,6 @@ import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -35,8 +34,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -291,6 +290,18 @@ private fun StudioScreen(
     var fill by remember(item?.uri) { mutableStateOf(true) }
     var dim by remember(item?.uri) { mutableFloatStateOf(0f) }
     var rotation by remember(item?.uri) { mutableIntStateOf(0) }
+    val videoPreferences = remember(context) {
+        context.getSharedPreferences("wallora", Context.MODE_PRIVATE)
+    }
+    var videoMuted by remember(item?.uri) {
+        mutableStateOf(videoPreferences.getBoolean("video_muted", true))
+    }
+    var videoFill by remember(item?.uri) {
+        mutableStateOf(videoPreferences.getBoolean("video_fill", true))
+    }
+    var videoSpeed by remember(item?.uri) {
+        mutableFloatStateOf(videoPreferences.getFloat("video_speed", 1f).coerceIn(0.5f, 2f))
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("image/jpeg")
@@ -451,9 +462,63 @@ private fun StudioScreen(
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Set both screens") }
         } else if (selectedItem.kind == MediaKind.VIDEO) {
+            Text("Live video controls", style = MaterialTheme.typography.titleMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Mute audio", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Muted by default for silent wallpapers.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = videoMuted,
+                    onCheckedChange = {
+                        videoMuted = it
+                        videoPreferences.edit().putBoolean("video_muted", it).apply()
+                    }
+                )
+            }
+            Text("Video framing", style = MaterialTheme.typography.bodyMedium)
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = videoFill,
+                    onClick = {
+                        videoFill = true
+                        videoPreferences.edit().putBoolean("video_fill", true).apply()
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                ) { Text("Fill") }
+                SegmentedButton(
+                    selected = !videoFill,
+                    onClick = {
+                        videoFill = false
+                        videoPreferences.edit().putBoolean("video_fill", false).apply()
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                ) { Text("Fit") }
+            }
+            Text("Playback speed  •  ${"%.2f".format(videoSpeed)}×")
+            Slider(
+                value = videoSpeed,
+                onValueChange = { videoSpeed = it },
+                onValueChangeFinished = {
+                    videoPreferences.edit().putFloat("video_speed", videoSpeed).apply()
+                },
+                valueRange = 0.5f..2f,
+                steps = 5
+            )
             Button(onClick = {
-                context.getSharedPreferences("wallora", Context.MODE_PRIVATE).edit()
-                    .putString("active_video_uri", selectedItem.uri.toString()).apply()
+                videoPreferences.edit()
+                    .putString("active_video_uri", selectedItem.uri.toString())
+                    .putBoolean("video_muted", videoMuted)
+                    .putBoolean("video_fill", videoFill)
+                    .putFloat("video_speed", videoSpeed)
+                    .apply()
                 val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                     putExtra(
                         WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
@@ -475,7 +540,7 @@ private fun StudioScreen(
                 }.onFailure { onStatus("This device does not expose the live wallpaper chooser.") }
             }, modifier = Modifier.fillMaxWidth()) { Text("Open system wallpaper chooser") }
             Text(
-                "Image composition controls do not alter video files. Video playback settings are managed separately.",
+                "Looping is enabled. Updated settings are read when the Android live-wallpaper preview starts.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
