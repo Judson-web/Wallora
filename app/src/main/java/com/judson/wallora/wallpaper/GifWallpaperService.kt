@@ -33,9 +33,12 @@ class GifWallpaperService : WallpaperService() {
 
         private val frameTask = object : Runnable {
             override fun run() {
-                if (!visible) return
+                if (!visible || movie == null) {
+                    handler.removeCallbacks(this)
+                    return
+                }
                 drawFrame()
-                handler.postDelayed(this, FRAME_INTERVAL_MS)
+                if (visible && movie != null) handler.postDelayed(this, FRAME_INTERVAL_MS)
             }
         }
 
@@ -57,8 +60,10 @@ class GifWallpaperService : WallpaperService() {
             handler.removeCallbacks(frameTask)
             if (isVisible) {
                 if (movie == null) loadMovie()
-                movieStartedAt = SystemClock.uptimeMillis()
-                handler.post(frameTask)
+                if (movie != null) {
+                    movieStartedAt = SystemClock.uptimeMillis()
+                    handler.post(frameTask)
+                }
             }
         }
 
@@ -78,9 +83,23 @@ class GifWallpaperService : WallpaperService() {
             val prefs = getSharedPreferences(PREFERENCES, MODE_PRIVATE)
             val uri = prefs.getString(ACTIVE_GIF_URI, null)?.let(Uri::parse) ?: return
             fill = prefs.getBoolean(GIF_FILL, true)
-            movie = runCatching {
+            val declaredSize = runCatching {
+                contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val sizeColumn = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (cursor.moveToFirst() && sizeColumn >= 0 && !cursor.isNull(sizeColumn)) {
+                        cursor.getLong(sizeColumn)
+                    } else null
+                }
+            }.getOrNull()
+            if (declaredSize != null && declaredSize > MAX_GIF_BYTES) return
+
+            val decoded = runCatching {
                 contentResolver.openInputStream(uri)?.use { Movie.decodeStream(it) }
             }.getOrNull()
+            movie = decoded?.takeIf {
+                it.width() > 0 && it.height() > 0 &&
+                    it.width().toLong() * it.height().toLong() <= MAX_GIF_PIXELS
+            }
             movieStartedAt = SystemClock.uptimeMillis()
         }
 
@@ -122,6 +141,8 @@ class GifWallpaperService : WallpaperService() {
 
     companion object {
         private const val FRAME_INTERVAL_MS = 33L
+        private const val MAX_GIF_BYTES = 32L * 1024L * 1024L
+        private const val MAX_GIF_PIXELS = 16_000_000L
         private const val PREFERENCES = "wallora"
         private const val ACTIVE_GIF_URI = "active_gif_uri"
         private const val GIF_FILL = "gif_fill"
