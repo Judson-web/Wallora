@@ -69,9 +69,9 @@ private val FOCAL_COORDINATES = listOf(
 )
 private val FOCAL_LABELS = listOf("↖", "↑", "↗", "←", "•", "→", "↙", "↓", "↘")
 private val FOCAL_ROTATION_MAPS = mapOf(
-    90 to listOf(6, 3, 0, 7, 4, 1, 8, 5, 2),
+    90 to listOf(2, 5, 8, 1, 4, 7, 0, 3, 6),
     180 to listOf(8, 7, 6, 5, 4, 3, 2, 1, 0),
-    270 to listOf(2, 5, 8, 1, 4, 7, 0, 3, 6)
+    270 to listOf(6, 3, 0, 7, 4, 1, 8, 5, 2)
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -331,6 +331,9 @@ private fun StudioScreen(
     var contrast by remember(item?.uri) { mutableFloatStateOf(1f) }
     var saturation by remember(item?.uri) { mutableFloatStateOf(1f) }
     val focusPoint = FOCAL_COORDINATES[focusIndex]
+    val normalizedRotation = ((rotation % 360) + 360) % 360
+    val rotatedFocusIndex = FOCAL_ROTATION_MAPS[normalizedRotation]?.get(focusIndex) ?: focusIndex
+    val renderFocusPoint = FOCAL_COORDINATES[rotatedFocusIndex]
     val previewColorFilter = remember(brightness, contrast, saturation) {
         val s = saturation.coerceIn(0f, 2f)
         val c = contrast.coerceIn(0.5f, 1.5f)
@@ -363,7 +366,7 @@ private fun StudioScreen(
             val result = runCatching {
                 val rendered = WallpaperImageRenderer.render(
                     context, activeItem.uri, fill, dim, rotation,
-                    focusPoint.first, focusPoint.second, brightness, contrast, saturation
+                    renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
                 )
                 try {
                     val output = requireNotNull(context.contentResolver.openOutputStream(destination)) {
@@ -410,7 +413,7 @@ private fun StudioScreen(
         val result = runCatching {
             val rendered = WallpaperImageRenderer.render(
                 context, selectedItem.uri, fill, dim, rotation,
-                focusPoint.first, focusPoint.second, brightness, contrast, saturation
+                renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
             )
             try {
                 StaticWallpaperController.apply(context, rendered, target).getOrThrow()
@@ -460,8 +463,6 @@ private fun StudioScreen(
                     }
                 }
             } else {
-                val normalizedRotation = ((rotation % 360) + 360) % 360
-                val previewFocus = FOCAL_ROTATION_MAPS[normalizedRotation]?.get(focusIndex) ?: focusIndex
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val imageModifier = if (normalizedRotation == 90 || normalizedRotation == 270) {
                         Modifier.align(Alignment.Center)
@@ -474,7 +475,7 @@ private fun StudioScreen(
                         model = selectedItem.uri,
                         contentDescription = "Wallpaper preview",
                         modifier = imageModifier,
-                        alignment = if (fill) FOCAL_ALIGNMENTS[previewFocus] else Alignment.Center,
+                        alignment = if (fill) FOCAL_ALIGNMENTS[rotatedFocusIndex] else Alignment.Center,
                         colorFilter = previewColorFilter,
                         contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
                     )
