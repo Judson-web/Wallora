@@ -450,18 +450,25 @@ private fun StudioScreen(
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             if (selectedItem.kind == MediaKind.VIDEO) {
+                AsyncImage(
+                    model = selectedItem.uri,
+                    contentDescription = "Video wallpaper first-frame preview",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = if (videoFill) ContentScale.Crop else ContentScale.Fit
+                )
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                        shape = RoundedCornerShape(50)
                     ) {
-                        Icon(Icons.Rounded.Movie, contentDescription = null, modifier = Modifier.size(44.dp))
-                        Text("Video live wallpaper")
-                        Text(
-                            "Playback preview is opened through Android below.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.Movie, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Live video wallpaper")
+                        }
                     }
                 }
             } else {
