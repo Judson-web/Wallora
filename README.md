@@ -14,16 +14,16 @@ Wallora currently includes:
 
 - Three-section navigation: Library, Studio, and Settings.
 - Multi-select media import through Android's system document picker.
-- A local library with image/video labels, thumbnails, search, filters, favourites, and remove-from-library.
+- A local library with image/video labels, image previews, extracted video-frame thumbnails, search, filters, favourites, and remove-from-library.
 - Persisted Storage Access Framework (SAF) permissions for individually selected media.
 - Recursive SAF folder indexing with bounded traversal. A scan imports up to 2,500 supported files and visits at most 10,000 entries.
-- A still-image editor with Fill/Fit composition, quarter-turn rotation, and a dim overlay.
+- A still-image editor with Fill/Fit composition, a 3×3 focal-position grid, quarter-turn rotation, brightness, contrast, saturation, and a dim overlay.
 - Screen-shaped JPEG rendering, export through Android's Create Document flow, and direct application of the rendered result to Home, Lock, or both.
 - A video live-wallpaper service with looping, mute/unmute, Fill/Fit framing, and 0.5×–2× playback speed.
 - Optional All files access settings handoff. Core import and folder scanning do not require it.
 - Edge-to-edge activity layout and an Android 17 GitHub Actions debug-build workflow.
 
-The still-image editor renders the current crop mode, rotation, and dim level into a new JPEG. Precision focal-point positioning, arbitrary crop handles, brightness/contrast/saturation, undo/redo, and non-destructive edit history remain planned. GIF files are recognised in the library but are not yet animated as live wallpapers.
+The still-image editor renders composition, focal position, rotation, brightness, contrast, saturation, and dim level into a new JPEG. The 3×3 focal grid is the current positioning control; draggable freeform crop, undo/redo, and non-destructive edit history remain planned. GIF files are recognised in the library but are not yet animated as live wallpapers.
 
 ## Design plan
 
