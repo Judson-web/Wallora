@@ -48,6 +48,12 @@ object MediaLibraryStore {
 
     fun remove(context: Context, uri: Uri) {
         save(context, load(context).filterNot { it.uri == uri })
+        runCatching {
+            context.contentResolver.releasePersistableUriPermission(
+                uri,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
     }
 
     private fun save(context: Context, items: List<MediaItem>) {
