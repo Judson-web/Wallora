@@ -8,5 +8,6 @@ data class MediaItem(
     val uri: Uri,
     val displayName: String,
     val mimeType: String?,
-    val kind: MediaKind
+    val kind: MediaKind,
+    val isFavorite: Boolean = false
 )
