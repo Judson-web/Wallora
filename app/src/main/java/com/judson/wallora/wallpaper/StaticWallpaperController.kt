@@ -5,6 +5,14 @@ import android.content.Context
 import android.net.Uri
 
 object StaticWallpaperController {
+    fun apply(context: Context, bitmap: android.graphics.Bitmap, target: Int): Result<Unit> = runCatching {
+        val manager = WallpaperManager.getInstance(context)
+        check(manager.isWallpaperSupported) { "Wallpaper service is not supported on this device." }
+        check(manager.isSetWallpaperAllowed) { "The device administrator or system policy prevents changing wallpaper." }
+        manager.setBitmap(bitmap, null, true, target)
+        Unit
+    }
+
     fun apply(context: Context, uri: Uri, target: Int): Result<Unit> = runCatching {
         val manager = WallpaperManager.getInstance(context)
         check(manager.isWallpaperSupported) { "Wallpaper service is not supported on this device." }
