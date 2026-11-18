@@ -1,0 +1,12 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+*.iml
+.DS_Store
+
+# Release signing material: NEVER commit private keys or passwords
+/signing/
+/keystore.properties
+*.jks
+*.keystore
