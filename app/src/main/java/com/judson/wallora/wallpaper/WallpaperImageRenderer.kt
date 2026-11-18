@@ -6,9 +6,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ImageDecoder
-import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import kotlin.math.max
@@ -34,7 +32,6 @@ object WallpaperImageRenderer {
         rotationDegrees: Int
     ): Bitmap {
         val decoded = decode(context, sourceUri)
-        val rotated = rotate(decoded, rotationDegrees)
         try {
             val metrics = context.resources.displayMetrics
             val screenWidth = max(1, metrics.widthPixels)
@@ -52,19 +49,27 @@ object WallpaperImageRenderer {
             val canvas = Canvas(output)
             canvas.drawColor(Color.BLACK)
 
-            val scaleX = outputWidth.toFloat() / rotated.width
-            val scaleY = outputHeight.toFloat() / rotated.height
+            val normalizedRotation = ((rotationDegrees % 360) + 360) % 360
+            val rotatedWidth = if (normalizedRotation == 90 || normalizedRotation == 270) {
+                decoded.height
+            } else {
+                decoded.width
+            }
+            val rotatedHeight = if (normalizedRotation == 90 || normalizedRotation == 270) {
+                decoded.width
+            } else {
+                decoded.height
+            }
+            val scaleX = outputWidth.toFloat() / rotatedWidth
+            val scaleY = outputHeight.toFloat() / rotatedHeight
             val scale = if (fill) max(scaleX, scaleY) else min(scaleX, scaleY)
-            val drawnWidth = rotated.width * scale
-            val drawnHeight = rotated.height * scale
-            val destination = RectF(
-                (outputWidth - drawnWidth) / 2f,
-                (outputHeight - drawnHeight) / 2f,
-                (outputWidth + drawnWidth) / 2f,
-                (outputHeight + drawnHeight) / 2f
-            )
             val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
-            canvas.drawBitmap(rotated, null, destination, imagePaint)
+            canvas.save()
+            canvas.translate(outputWidth / 2f, outputHeight / 2f)
+            canvas.rotate(normalizedRotation.toFloat())
+            canvas.scale(scale, scale)
+            canvas.drawBitmap(decoded, -decoded.width / 2f, -decoded.height / 2f, imagePaint)
+            canvas.restore()
 
             val dimAmount = dim.coerceIn(0f, 0.8f)
             if (dimAmount > 0f) {
@@ -75,7 +80,6 @@ object WallpaperImageRenderer {
             }
             return output
         } finally {
-            if (rotated !== decoded) rotated.recycle()
             decoded.recycle()
         }
     }
@@ -120,10 +124,4 @@ object WallpaperImageRenderer {
             ?: error("Unable to decode the selected image.")
     }
 
-    private fun rotate(source: Bitmap, degrees: Int): Bitmap {
-        val normalized = ((degrees % 360) + 360) % 360
-        if (normalized == 0) return source
-        val matrix = Matrix().apply { postRotate(normalized.toFloat()) }
-        return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
-    }
 }
