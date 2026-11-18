@@ -1,67 +1,96 @@
 # Wallora
 
-**A modern, local-first Android wallpaper studio** for images, animated images, and video/live wallpapers.
+**A local-first Android wallpaper studio** for images, animated media, and video/live wallpapers.
 
-> Project baseline: Android 17 (API 37), with a practical `minSdk` of 26. This repository is a development foundation, not a claim of a verified release build. Build and device validation are still required.
+- Android application ID: \`app.wallora.premium\`
+- Gradle namespace: \`com.judson.wallora\`
+- Target SDK: Android 17 / API 37
+- Minimum SDK: Android 8.0 / API 26
+- Language and UI: Kotlin, Jetpack Compose, Material 3
+
+## Current app experience
+
+The current implementation includes:
+
+- Three-section navigation: Library, Studio, and Settings.
+- Multi-select media import using Android's document picker.
+- A local library that persists imported URI references and metadata.
+- Image/video type labels, thumbnail grid, search, filters, favourites, and remove-from-library action.
+- A Studio preview with Fill/Fit and preview dim controls.
+- Static wallpaper application to Home, Lock, or both through WallpaperManager.
+- Video live-wallpaper preview handoff through a registered WallpaperService.
+- Folder access through SAF and an optional All files access settings handoff.
+- Edge-to-edge activity window layout.
+- Android 17 debug-build workflow in GitHub Actions.
+
+The Studio's Fill/Fit and dim controls currently affect the preview only. They are not yet rendered into an exported image. GIF rendering, folder indexing, and advanced editing are not implemented yet.
 
 ## Design plan
 
-The product direction, screen layouts, interaction flows, visual system, accessibility requirements, storage model, and phased implementation roadmap are documented in [docs/DESIGN_PLAN.md](docs/DESIGN_PLAN.md). Treat this as the design source of truth while implementing the app; it describes the intended product and does not imply that all planned features are already implemented.
+The product direction, screen layouts, interaction flows, visual system, accessibility requirements, storage model, and phased implementation roadmap are documented in [docs/DESIGN_PLAN.md](docs/DESIGN_PLAN.md).
 
-## Product direction
+## Storage and privacy
 
-- Browse device media and import files/folders using Android's Storage Access Framework.
-- Optional **All files access** mode for advanced local-library indexing. This is special access, not a silent grant, and is not required for core wallpaper use.
-- Static wallpaper preview with crop, fit/fill, pan/zoom, rotation, blur and dim controls (editor controls are planned).
-- Apply to Home, Lock, or both where the OS/device supports the requested target.
-- Video live wallpaper implemented as a real `WallpaperService`, with preview/confirmation through Android's wallpaper UI.
-- Playback controls planned: mute, loop, fit/fill, playback speed, frame-rate cap, pause-when-not-visible, and battery-aware behavior.
-- Animated image and image-sequence support planned behind the same renderer abstraction.
-- Favorites, collections, recent items, metadata, duplicate detection and local search planned.
-- Material You / dynamic color, dark theme, edge-to-edge layouts, large-screen adaptive UI.
-- No account, cloud upload, or analytics requirement.
+Wallora uses Android's document picker by default. Imported media is represented by persisted content URIs and basic metadata; originals are not copied or modified by library import. A selected folder URI can be retained through SAF, but recursive folder indexing is a later milestone.
 
-## Platform limits
+Optional **All files access** is a special Android permission. It is not required for core wallpaper use, is subject to Google Play policy, and does not grant unrestricted access to protected Android directories.
 
-Android owns the final wallpaper confirmation and launcher integration. A third-party app cannot universally force a live wallpaper onto a device whose OEM firmware, launcher, policy, or system wallpaper service blocks it. Wallora registers its own `WallpaperService`, launches the standard live-wallpaper preview, offers the system chooser as a fallback, and explains unsupported states. It does not bypass device security or OEM restrictions.
+## Live wallpaper limitations
 
-## Storage model
+Android owns the final wallpaper preview and confirmation. Wallora cannot universally force a live wallpaper onto a device whose OEM firmware, launcher, policy, or system wallpaper service blocks it. The app registers its own WallpaperService and launches the supported system preview/chooser flows.
 
-Default: Photo Picker / `ACTION_OPEN_DOCUMENT` / `ACTION_OPEN_DOCUMENT_TREE`, retaining URI permissions as needed. Optional advanced mode: `MANAGE_EXTERNAL_STORAGE` is exposed only through an explicit explanation and Android special-access settings. Android/Google Play policy restricts this permission; a wallpaper app may not qualify for Play distribution if its core purpose is only selecting media. Even with All files access, Android restricts important app-specific directories such as `Android/data` and most of `Android/obb`.
+The current video renderer is an early baseline. Device/codec compatibility, lifecycle behaviour, battery impact, and persistent source access still require broader testing.
 
-## Android identity and release signing
+## Release signing
 
-- Application ID: `app.wallora.premium`
-- Gradle namespace: `com.judson.wallora`
-- Release key alias: `wallora_release`
+The release application ID is \`app.wallora.premium\`, with signing alias \`wallora_release\`.
 
-The private signing keystore and `keystore.properties` are intentionally excluded from Git. See [SIGNING.md](SIGNING.md) for setup. Never commit the keystore, passwords, signing ZIP, or local credential files. Losing the keystore can prevent updates to an app distributed under this application ID.
+Private signing files are intentionally excluded from Git. See [SIGNING.md](SIGNING.md). Never commit the keystore, signing ZIP, or passwords. Keep secure backups of the same signing identity for every future update.
 
-## Build
+## Build locally
 
-Requirements: Android Studio with Android SDK Platform 37, JDK 17, and a Gradle wrapper generated by Android Studio (`gradle wrapper`). Open the project in Android Studio and sync. The wrapper is not included in this initial source scaffold.
+Requirements:
+- Android Studio with Android SDK Platform 37
+- JDK 17
+- Gradle 8.13 or compatible wrapper
 
-## Current implementation status
+Open the repository in Android Studio and sync, or install Gradle 8.13 and run:
 
-This is an initial source scaffold: Compose Material 3 app shell, system document/media picker, optional All files access settings handoff, static wallpaper apply action, video `WallpaperService` with Media3 playback, and Android 17 target configuration. It is not production-complete. Remaining work includes editor gestures/crop export, background library indexing, thumbnail database, video compatibility/transcoding, device/OEM test matrix, automated UI/instrumentation tests, accessibility audit, signed build validation, and Play policy review.
+\`\`\`bash
+gradle :app:assembleDebug
+\`\`\`
 
-## Repository layout
+The repository CI workflow uses Gradle 8.13 and builds the debug APK on pushes and pull requests. It uploads the APK as a workflow artifact when the build succeeds.
 
-```text
+## Repository structure
+
+\`\`\`text
 app/src/main/
   AndroidManifest.xml
   java/com/judson/wallora/
     MainActivity.kt
-    data/MediaItem.kt
-    data/MediaRepository.kt
-    wallpaper/StaticWallpaperController.kt
-    wallpaper/VideoWallpaperService.kt
+    data/
+      MediaItem.kt
+      MediaRepository.kt
+      MediaLibraryStore.kt
+    wallpaper/
+      StaticWallpaperController.kt
+      VideoWallpaperService.kt
     ui/WalloraApp.kt
   res/xml/wallpaper.xml
 docs/DESIGN_PLAN.md
+.github/workflows/android-ci.yml
 SIGNING.md
-```
+\`\`\`
+
+## Roadmap
+
+1. Complete media library: SAF folder indexing, thumbnail caching, metadata, sorting, robust permission recovery.
+2. Studio renderer: real crop/position/rotation/colour processing, undo/redo, and export.
+3. Live wallpaper: persistent URI grants, playback settings, error recovery, and OEM/device compatibility tests.
+4. Animated media: GIF and image-sequence rendering.
+5. Release hardening: automated tests, accessibility, performance, battery profiling, privacy and store-policy review.
 
 ## License
 
-No license is applied yet. Choose one before public distribution.
+No license has been applied yet. Choose one before public distribution.
