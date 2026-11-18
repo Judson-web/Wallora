@@ -4,6 +4,7 @@ import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -34,6 +35,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +48,7 @@ import com.judson.wallora.data.MediaLibraryStore
 import com.judson.wallora.data.MediaRepository
 import com.judson.wallora.wallpaper.StaticWallpaperController
 import com.judson.wallora.wallpaper.VideoWallpaperService
+import com.judson.wallora.wallpaper.WallpaperImageRenderer
 
 private enum class WalloraTab { LIBRARY, STUDIO, SETTINGS }
 
@@ -65,7 +68,7 @@ fun WalloraApp() {
         }
         items = MediaLibraryStore.load(context)
         selected = items.lastOrNull() ?: selected
-        if (uris.isNotEmpty()) status = "Added \${uris.size} item(s) to your library."
+        if (uris.isNotEmpty()) status = "Added ${uris.size} item(s) to your library."
     }
 
     MaterialTheme(
@@ -119,7 +122,14 @@ fun WalloraApp() {
                 WalloraTab.STUDIO -> StudioScreen(
                     modifier = Modifier.padding(padding), item = selected,
                     onImport = { importLauncher.launch(arrayOf("image/*", "video/*")) },
-                    onStatus = { status = it }, context = context
+                    onStatus = { status = it },
+                    onExportComplete = { exported ->
+                        MediaLibraryStore.add(context, exported)
+                        items = MediaLibraryStore.load(context)
+                        selected = exported
+                    },
+                    status = status,
+                    context = context
                 )
                 WalloraTab.SETTINGS -> SettingsScreen(
                     modifier = Modifier.padding(padding), context = context,
@@ -158,7 +168,7 @@ private fun LibraryScreen(
     Column(modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Spacer(Modifier.height(12.dp))
         Text("Your collection", style = MaterialTheme.typography.headlineSmall)
-        Text("\${items.size} imported item(s)", color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Text("${items.size} imported item(s)", color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(14.dp))
         OutlinedTextField(
@@ -265,15 +275,58 @@ private fun StudioScreen(
     item: MediaItem?,
     onImport: () -> Unit,
     onStatus: (String) -> Unit,
+    onExportComplete: (MediaItem) -> Unit,
+    status: String,
     context: Context
 ) {
     var fill by remember(item?.uri) { mutableStateOf(true) }
     var dim by remember(item?.uri) { mutableFloatStateOf(0f) }
+    var rotation by remember(item?.uri) { mutableIntStateOf(0) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/jpeg")
+    ) { destination ->
+        val activeItem = item
+        if (destination == null) {
+            onStatus("Export cancelled.")
+        } else if (activeItem == null) {
+            onStatus("Choose an image before exporting.")
+        } else {
+            val result = runCatching {
+                val rendered = WallpaperImageRenderer.render(
+                    context, activeItem.uri, fill, dim, rotation
+                )
+                try {
+                    val output = requireNotNull(context.contentResolver.openOutputStream(destination)) {
+                        "The selected destination could not be opened."
+                    }
+                    output.use { WallpaperImageRenderer.writeJpeg(rendered, it) }
+                } finally {
+                    rendered.recycle()
+                }
+                MediaRepository.persistReadPermission(
+                    context.contentResolver,
+                    destination,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                MediaRepository.fromDocument(context.contentResolver, destination)
+            }
+            result.fold(
+                { saved ->
+                    onExportComplete(saved)
+                    onStatus("Edited copy saved to your selected location.")
+                },
+                { error -> onStatus("Export failed: ${error.message ?: "unknown error"}") }
+            )
+        }
+    }
 
     if (item == null) {
         Box(modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(52.dp))
                 Text("Studio", style = MaterialTheme.typography.headlineMedium)
                 Text("Choose something from your Library, or import a new wallpaper.")
@@ -283,78 +336,148 @@ private fun StudioScreen(
         return
     }
 
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    val selectedItem = item
+    fun applyEdited(target: Int) {
+        val result = runCatching {
+            val rendered = WallpaperImageRenderer.render(
+                context, selectedItem.uri, fill, dim, rotation
+            )
+            try {
+                StaticWallpaperController.apply(context, rendered, target).getOrThrow()
+            } finally {
+                rendered.recycle()
+            }
+        }
+        onStatus(
+            result.fold(
+                { "Rendered wallpaper applied successfully." },
+                { "Could not apply wallpaper: ${it.message ?: "unknown error"}" }
+            )
+        )
+    }
+
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
         Text("Studio", style = MaterialTheme.typography.headlineSmall)
-        Text(item.displayName, style = MaterialTheme.typography.titleMedium, maxLines = 1,
-            overflow = TextOverflow.Ellipsis)
+        Text(
+            selectedItem.displayName,
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
         Box(
             Modifier.fillMaxWidth().aspectRatio(0.62f).clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            AsyncImage(model = item.uri, contentDescription = "Wallpaper preview",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = if (fill) ContentScale.Crop else ContentScale.Fit)
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim * 0.65f)))
-            Surface(modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+            AsyncImage(
+                model = selectedItem.uri,
+                contentDescription = "Wallpaper preview",
+                modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation.toFloat() },
+                contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
+            )
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
+            Surface(
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                shape = RoundedCornerShape(50)) {
-                Text("PREVIEW", Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    style = MaterialTheme.typography.labelSmall)
+                shape = RoundedCornerShape(50)
+            ) {
+                Text(
+                    "PREVIEW  •  ${rotation}°",
+                    Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         }
+
         Text("Composition", style = MaterialTheme.typography.titleMedium)
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            SegmentedButton(selected = fill, onClick = { fill = true },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)) { Text("Fill") }
-            SegmentedButton(selected = !fill, onClick = { fill = false },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)) { Text("Fit") }
+            SegmentedButton(
+                selected = fill,
+                onClick = { fill = true },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+            ) { Text("Fill") }
+            SegmentedButton(
+                selected = !fill,
+                onClick = { fill = false },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+            ) { Text("Fit") }
         }
-        Text("Preview dim  •  \${(dim * 100).toInt()}%")
-        Slider(value = dim, onValueChange = { dim = it }, valueRange = 0f..0.6f)
-        Text("These controls currently affect the preview only. Exporting a rendered edit is a separate implementation milestone.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        OutlinedButton(
+            onClick = { rotation = (rotation + 90) % 360 },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Rotate 90°  •  Current: ${rotation}°")
+        }
 
-        if (item.kind == MediaKind.IMAGE) {
+        Text("Dim overlay  •  ${(dim * 100).toInt()}%")
+        Slider(value = dim, onValueChange = { dim = it }, valueRange = 0f..0.8f)
+
+        if (selectedItem.kind == MediaKind.IMAGE) {
+            Text(
+                "The editor renders a screen-shaped image. Fill crops to the screen; Fit keeps the whole image with a dark canvas.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = { exportLauncher.launch("Wallora-edited-wallpaper.jpg") },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Save edited copy")
+            }
             Text("Apply wallpaper", style = MaterialTheme.typography.titleMedium)
-            Button(onClick = {
-                val result = StaticWallpaperController.apply(context, item.uri, WallpaperManager.FLAG_SYSTEM)
-                onStatus(result.fold({ "Home wallpaper applied successfully." },
-                    { "Could not apply wallpaper: \${it.message}" }))
-            }, modifier = Modifier.fillMaxWidth()) { Text("Set Home screen") }
-            OutlinedButton(onClick = {
-                val result = StaticWallpaperController.apply(context, item.uri, WallpaperManager.FLAG_LOCK)
-                onStatus(result.fold({ "Lock-screen wallpaper applied successfully." },
-                    { "Could not apply wallpaper: \${it.message}" }))
-            }, modifier = Modifier.fillMaxWidth()) { Text("Set Lock screen") }
-            OutlinedButton(onClick = {
-                val result = StaticWallpaperController.apply(context, item.uri,
-                    WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
-                onStatus(result.fold({ "Home and Lock wallpapers applied successfully." },
-                    { "Could not apply wallpaper: \${it.message}" }))
-            }, modifier = Modifier.fillMaxWidth()) { Text("Set both screens") }
-        } else if (item.kind == MediaKind.VIDEO) {
+            Button(
+                onClick = { applyEdited(WallpaperManager.FLAG_SYSTEM) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Set Home screen") }
+            OutlinedButton(
+                onClick = { applyEdited(WallpaperManager.FLAG_LOCK) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Set Lock screen") }
+            OutlinedButton(
+                onClick = {
+                    applyEdited(WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK)
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Set both screens") }
+        } else if (selectedItem.kind == MediaKind.VIDEO) {
             Button(onClick = {
                 context.getSharedPreferences("wallora", Context.MODE_PRIVATE).edit()
-                    .putString("active_video_uri", item.uri.toString()).apply()
+                    .putString("active_video_uri", selectedItem.uri.toString()).apply()
                 val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                    putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                        ComponentName(context, VideoWallpaperService::class.java))
+                    putExtra(
+                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(context, VideoWallpaperService::class.java)
+                    )
                 }
                 runCatching { context.startActivity(intent) }
-                    .onFailure { onStatus("Live wallpaper preview is unavailable on this device. Try the system chooser.") }
+                    .onFailure {
+                        onStatus("Live wallpaper preview is unavailable on this device. Try the system chooser.")
+                    }
             }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Rounded.Movie, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Text("Preview live wallpaper in Android")
             }
             OutlinedButton(onClick = {
-                runCatching { context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)) }
-                    .onFailure { onStatus("This device does not expose the live wallpaper chooser.") }
+                runCatching {
+                    context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
+                }.onFailure { onStatus("This device does not expose the live wallpaper chooser.") }
             }, modifier = Modifier.fillMaxWidth()) { Text("Open system wallpaper chooser") }
+            Text(
+                "Image composition controls do not alter video files. Video playback settings are managed separately.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         } else {
-            Text("This media renderer is not available yet.")
+            Text(
+                "GIF rendering is not available yet. Choose a still image or video for the current editor.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
+
+        Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -372,7 +495,7 @@ private fun SettingsScreen(
                 context.getSharedPreferences("wallora_library", Context.MODE_PRIVATE)
                     .edit().putString("library_folder_uri", uri.toString()).apply()
                 onStatus("Folder access saved. Folder indexing is a follow-up milestone.")
-            }.onFailure { onStatus("Could not retain folder access: \${it.message}") }
+            }.onFailure { onStatus("Could not retain folder access: ${it.message}") }
         }
     }
     val hasAllFiles = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
@@ -394,7 +517,7 @@ private fun SettingsScreen(
                 OutlinedButton(onClick = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                            data = Uri.parse("package:\${context.packageName}")
+                            data = Uri.parse("package:${context.packageName}")
                         }
                         runCatching { context.startActivity(intent) }
                             .onFailure { onStatus("Could not open All files access settings.") }
