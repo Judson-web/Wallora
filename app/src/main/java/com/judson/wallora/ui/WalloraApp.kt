@@ -41,6 +41,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
 import com.judson.wallora.data.MediaItem
 import com.judson.wallora.data.MediaKind
@@ -133,7 +136,13 @@ fun WalloraApp() {
                 )
                 WalloraTab.SETTINGS -> SettingsScreen(
                     modifier = Modifier.padding(padding), context = context,
-                    status = status, onStatus = { status = it }
+                    status = status,
+                    onStatus = { status = it },
+                    onMediaIndexed = { found ->
+                        MediaLibraryStore.addAll(context, found)
+                        items = MediaLibraryStore.load(context)
+                        status = "Added or refreshed ${found.size} media item(s) from the selected folder."
+                    }
                 )
             }
         }
@@ -486,47 +495,105 @@ private fun SettingsScreen(
     modifier: Modifier = Modifier,
     context: Context,
     status: String,
-    onStatus: (String) -> Unit
+    onStatus: (String) -> Unit,
+    onMediaIndexed: (List<MediaItem>) -> Unit
 ) {
+    var folderUri by remember {
+        mutableStateOf(
+            context.getSharedPreferences("wallora_library", Context.MODE_PRIVATE)
+                .getString("library_folder_uri", null)?.let(Uri::parse)
+        )
+    }
+    var scanning by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
                 context.getSharedPreferences("wallora_library", Context.MODE_PRIVATE)
                     .edit().putString("library_folder_uri", uri.toString()).apply()
-                onStatus("Folder access saved. Folder indexing is a follow-up milestone.")
+                folderUri = uri
+                onStatus("Folder access saved. Scan it to add supported wallpapers to your library.")
             }.onFailure { onStatus("Could not retain folder access: ${it.message}") }
         }
     }
     val hasAllFiles = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
 
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall)
-        Text("Control how Wallora looks and accesses your media.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "Control how Wallora looks and accesses your media.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Storage and privacy", style = MaterialTheme.typography.titleMedium)
                 Text("Wallora stores selected file references locally. It does not upload your wallpaper collection.")
-                OutlinedButton(onClick = { folderLauncher.launch(null) }, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = { folderLauncher.launch(folderUri) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Grant access to a folder")
+                    Text(if (folderUri == null) "Grant access to a folder" else "Change indexed folder")
                 }
-                OutlinedButton(onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                        }
-                        runCatching { context.startActivity(intent) }
-                            .onFailure { onStatus("Could not open All files access settings.") }
-                    } else onStatus("All files access is not available on this Android version.")
-                }, modifier = Modifier.fillMaxWidth()) {
+                if (folderUri != null) {
+                    Text(
+                        "A folder is connected. Scanning is limited to 2,500 supported files per pass.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
+                        onClick = {
+                            val selectedTree = folderUri
+                            if (selectedTree != null) {
+                                scope.launch {
+                                    scanning = true
+                                    try {
+                                        val found = withContext(Dispatchers.IO) {
+                                            MediaRepository.scanTree(context, selectedTree)
+                                        }
+                                        onMediaIndexed(found)
+                                        onStatus("Folder scan complete: ${found.size} supported media item(s) found.")
+                                    } catch (error: Exception) {
+                                        onStatus("Folder scan failed: ${error.message ?: "unknown error"}")
+                                    } finally {
+                                        scanning = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !scanning,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (scanning) "Scanning folder…" else "Scan folder for wallpapers")
+                    }
+                }
+                OutlinedButton(
+                    onClick = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            }
+                            runCatching { context.startActivity(intent) }
+                                .onFailure { onStatus("Could not open All files access settings.") }
+                        } else onStatus("All files access is not available on this Android version.")
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Text(if (hasAllFiles) "All files access: enabled" else "Manage All files access")
                 }
-                Text("All files access is optional and subject to Google Play policy. Android still protects some system and app-private folders.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "All files access is optional and subject to Google Play policy. Android still protects some system and app-private folders. Folder access works independently through Android's document picker.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
         ElevatedCard(Modifier.fillMaxWidth()) {
