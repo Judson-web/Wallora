@@ -53,6 +53,7 @@ import com.judson.wallora.data.MediaLibraryStore
 import com.judson.wallora.data.MediaRepository
 import com.judson.wallora.wallpaper.StaticWallpaperController
 import com.judson.wallora.wallpaper.VideoWallpaperService
+import com.judson.wallora.wallpaper.GifWallpaperService
 import com.judson.wallora.wallpaper.WallpaperImageRenderer
 
 private enum class WalloraTab { LIBRARY, STUDIO, SETTINGS }
