@@ -434,14 +434,31 @@ private fun StudioScreen(
             ).clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            AsyncImage(
-                model = selectedItem.uri,
-                contentDescription = "Wallpaper preview",
-                modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation.toFloat() },
-                alignment = FOCAL_ALIGNMENTS[focusIndex],
-                colorFilter = previewColorFilter,
-                contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
-            )
+            if (selectedItem.kind == MediaKind.VIDEO) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Rounded.Movie, contentDescription = null, modifier = Modifier.size(44.dp))
+                        Text("Video live wallpaper")
+                        Text(
+                            "Playback preview is opened through Android below.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                AsyncImage(
+                    model = selectedItem.uri,
+                    contentDescription = "Wallpaper preview",
+                    modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation.toFloat() },
+                    alignment = FOCAL_ALIGNMENTS[focusIndex],
+                    colorFilter = previewColorFilter,
+                    contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
+                )
+            }
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
@@ -456,6 +473,7 @@ private fun StudioScreen(
             }
         }
 
+        if (selectedItem.kind == MediaKind.IMAGE) {
         Text("Composition", style = MaterialTheme.typography.titleMedium)
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             SegmentedButton(
@@ -536,6 +554,8 @@ private fun StudioScreen(
             },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Reset image edits") }
+
+        }
 
         if (selectedItem.kind == MediaKind.IMAGE) {
             Text(
