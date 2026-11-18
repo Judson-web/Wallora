@@ -52,9 +52,9 @@ Private signing files are intentionally excluded from Git. See [SIGNING.md](SIGN
 Requirements:
 - Android Studio with Android SDK Platform 37
 - JDK 17
-- Gradle 8.13 or compatible wrapper
+- Gradle 9.5.0 (required by the API 37-compatible Android Gradle Plugin 9.3.1)
 
-Open the repository in Android Studio and sync, or install Gradle 8.13 and run:
+Open the repository in Android Studio and sync, or install Gradle 9.5.0 and run:
 
 \`\`\`bash
 gradle :app:assembleDebug
