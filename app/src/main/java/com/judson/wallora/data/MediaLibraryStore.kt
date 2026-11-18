@@ -45,7 +45,11 @@ object MediaLibraryStore {
     fun addAll(context: Context, incoming: List<MediaItem>) {
         val merged = LinkedHashMap<String, MediaItem>()
         load(context).forEach { merged[it.uri.toString()] = it }
-        incoming.forEach { merged[it.uri.toString()] = it }
+        incoming.forEach { item ->
+            val key = item.uri.toString()
+            val previouslySaved = merged[key]
+            merged[key] = if (previouslySaved?.isFavorite == true) item.copy(isFavorite = true) else item
+        }
         save(context, merged.values.toList())
     }
 
