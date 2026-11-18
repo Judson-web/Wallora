@@ -39,11 +39,13 @@ object MediaRepository {
         check(root.canRead()) { "Wallora no longer has access to this folder." }
 
         val indexed = LinkedHashMap<String, MediaItem>()
+        var visitedEntries = 0
         fun visit(directory: DocumentFile, depth: Int) {
-            if (depth > 12 || indexed.size >= maxItems) return
+            if (depth > 12 || indexed.size >= maxItems || visitedEntries >= 10_000) return
             val children = runCatching { directory.listFiles() }.getOrDefault(emptyArray())
             children.forEach { child ->
-                if (indexed.size >= maxItems) return
+                if (indexed.size >= maxItems || visitedEntries >= 10_000) return
+                visitedEntries += 1
                 val name = child.name ?: return@forEach
                 if (name.startsWith(".")) return@forEach
 
