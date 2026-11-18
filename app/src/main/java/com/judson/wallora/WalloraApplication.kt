@@ -3,7 +3,7 @@ package com.judson.wallora
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import coil.video.VideoFrameDecoder
+import coil.decode.VideoFrameDecoder
 
 /**
  * Shared Coil pipeline with Android video-frame extraction enabled.
