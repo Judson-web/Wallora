@@ -64,7 +64,7 @@ fun WalloraApp() {
             MediaLibraryStore.add(context, MediaRepository.fromDocument(context.contentResolver, uri))
         }
         items = MediaLibraryStore.load(context)
-        if (selected == null) selected = items.firstOrNull()
+        selected = items.lastOrNull() ?: selected
         if (uris.isNotEmpty()) status = "Added \${uris.size} item(s) to your library."
     }
 
@@ -258,6 +258,7 @@ private fun MediaCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StudioScreen(
     modifier: Modifier = Modifier,
