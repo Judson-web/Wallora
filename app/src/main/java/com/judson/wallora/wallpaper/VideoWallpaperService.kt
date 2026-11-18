@@ -2,7 +2,9 @@ package com.judson.wallora.wallpaper
 
 import android.service.wallpaper.WallpaperService
 import android.view.SurfaceHolder
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 
@@ -53,7 +55,14 @@ class VideoWallpaperService : WallpaperService() {
             exo.setVideoSurface(holder.surface)
             exo.setMediaItem(MediaItem.fromUri(uriString))
             exo.repeatMode = Player.REPEAT_MODE_ONE
+            exo.videoScalingMode = if (prefs.getBoolean("video_fill", true)) {
+                C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
+            } else {
+                C.VIDEO_SCALING_MODE_SCALE_TO_FIT
+            }
             exo.volume = if (prefs.getBoolean("video_muted", true)) 0f else 1f
+            val speed = prefs.getFloat("video_speed", 1f).coerceIn(0.5f, 2f)
+            exo.playbackParameters = PlaybackParameters(speed)
             exo.prepare()
             exo.playWhenReady = visible
         }
