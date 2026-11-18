@@ -35,6 +35,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter as ComposeColorFilter
+import androidx.compose.ui.graphics.ColorMatrix as ComposeColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +55,18 @@ import com.judson.wallora.wallpaper.VideoWallpaperService
 import com.judson.wallora.wallpaper.WallpaperImageRenderer
 
 private enum class WalloraTab { LIBRARY, STUDIO, SETTINGS }
+
+private val FOCAL_ALIGNMENTS = listOf(
+    Alignment.TopStart, Alignment.TopCenter, Alignment.TopEnd,
+    Alignment.CenterStart, Alignment.Center, Alignment.CenterEnd,
+    Alignment.BottomStart, Alignment.BottomCenter, Alignment.BottomEnd
+)
+private val FOCAL_COORDINATES = listOf(
+    0f to 0f, 0.5f to 0f, 1f to 0f,
+    0f to 0.5f, 0.5f to 0.5f, 1f to 0.5f,
+    0f to 1f, 0.5f to 1f, 1f to 1f
+)
+private val FOCAL_LABELS = listOf("↖", "↑", "↗", "←", "•", "→", "↙", "↓", "↘")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -302,6 +316,30 @@ private fun StudioScreen(
     var videoSpeed by remember(item?.uri) {
         mutableFloatStateOf(videoPreferences.getFloat("video_speed", 1f).coerceIn(0.5f, 2f))
     }
+    var focusIndex by remember(item?.uri) { mutableIntStateOf(4) }
+    var brightness by remember(item?.uri) { mutableFloatStateOf(0f) }
+    var contrast by remember(item?.uri) { mutableFloatStateOf(1f) }
+    var saturation by remember(item?.uri) { mutableFloatStateOf(1f) }
+    val focusPoint = FOCAL_COORDINATES[focusIndex]
+    val previewColorFilter = remember(brightness, contrast, saturation) {
+        val s = saturation.coerceIn(0f, 2f)
+        val c = contrast.coerceIn(0.5f, 1.5f)
+        val offset = ((1f - c) * 128f) + (brightness.coerceIn(-0.3f, 0.3f) * 255f)
+        val red = 0.213f + 0.787f * s
+        val green = 0.715f - 0.715f * s
+        val blue = 0.072f - 0.072f * s
+        val matrix = ComposeColorMatrix(
+            floatArrayOf(
+                red * c, green * c, blue * c, 0f, offset,
+                (0.213f - 0.213f * s) * c, (0.715f + 0.285f * s) * c,
+                (0.072f - 0.072f * s) * c, 0f, offset,
+                (0.213f - 0.213f * s) * c, (0.715f - 0.715f * s) * c,
+                (0.072f + 0.928f * s) * c, 0f, offset,
+                0f, 0f, 0f, 1f, 0f
+            )
+        )
+        ComposeColorFilter.colorMatrix(matrix)
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("image/jpeg")
@@ -314,7 +352,8 @@ private fun StudioScreen(
         } else {
             val result = runCatching {
                 val rendered = WallpaperImageRenderer.render(
-                    context, activeItem.uri, fill, dim, rotation
+                    context, activeItem.uri, fill, dim, rotation,
+                    focusPoint.first, focusPoint.second, brightness, contrast, saturation
                 )
                 try {
                     val output = requireNotNull(context.contentResolver.openOutputStream(destination)) {
@@ -360,7 +399,8 @@ private fun StudioScreen(
     fun applyEdited(target: Int) {
         val result = runCatching {
             val rendered = WallpaperImageRenderer.render(
-                context, selectedItem.uri, fill, dim, rotation
+                context, selectedItem.uri, fill, dim, rotation,
+                focusPoint.first, focusPoint.second, brightness, contrast, saturation
             )
             try {
                 StaticWallpaperController.apply(context, rendered, target).getOrThrow()
@@ -388,13 +428,18 @@ private fun StudioScreen(
             overflow = TextOverflow.Ellipsis
         )
         Box(
-            Modifier.fillMaxWidth().aspectRatio(0.62f).clip(RoundedCornerShape(24.dp))
+            Modifier.fillMaxWidth().aspectRatio(
+                (context.resources.displayMetrics.widthPixels.toFloat() /
+                    context.resources.displayMetrics.heightPixels.toFloat()).coerceIn(0.3f, 1.8f)
+            ).clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             AsyncImage(
                 model = selectedItem.uri,
                 contentDescription = "Wallpaper preview",
                 modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation.toFloat() },
+                alignment = FOCAL_ALIGNMENTS[focusIndex],
+                colorFilter = previewColorFilter,
                 contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
             )
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
@@ -424,6 +469,52 @@ private fun StudioScreen(
                 shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
             ) { Text("Fit") }
         }
+        Text("Focal position", style = MaterialTheme.typography.titleMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            repeat(3) { rowIndex ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    repeat(3) { columnIndex ->
+                        val index = rowIndex * 3 + columnIndex
+                        FilterChip(
+                            selected = focusIndex == index,
+                            onClick = { focusIndex = index },
+                            modifier = Modifier.weight(1f),
+                            label = {
+                                Text(
+                                    FOCAL_LABELS[index],
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        Text("Brightness  •  ${(brightness * 100).toInt()}%")
+        Slider(
+            value = brightness,
+            onValueChange = { brightness = it },
+            valueRange = -0.3f..0.3f,
+            steps = 11
+        )
+        Text("Contrast  •  ${(contrast * 100).toInt()}%")
+        Slider(
+            value = contrast,
+            onValueChange = { contrast = it },
+            valueRange = 0.5f..1.5f,
+            steps = 9
+        )
+        Text("Saturation  •  ${(saturation * 100).toInt()}%")
+        Slider(
+            value = saturation,
+            onValueChange = { saturation = it },
+            valueRange = 0f..2f,
+            steps = 9
+        )
         OutlinedButton(
             onClick = { rotation = (rotation + 90) % 360 },
             modifier = Modifier.fillMaxWidth()
@@ -433,6 +524,18 @@ private fun StudioScreen(
 
         Text("Dim overlay  •  ${(dim * 100).toInt()}%")
         Slider(value = dim, onValueChange = { dim = it }, valueRange = 0f..0.8f)
+        OutlinedButton(
+            onClick = {
+                fill = true
+                dim = 0f
+                rotation = 0
+                focusIndex = 4
+                brightness = 0f
+                contrast = 1f
+                saturation = 1f
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Reset image edits") }
 
         if (selectedItem.kind == MediaKind.IMAGE) {
             Text(
