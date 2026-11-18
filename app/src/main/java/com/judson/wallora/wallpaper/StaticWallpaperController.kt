@@ -9,9 +9,10 @@ object StaticWallpaperController {
         val manager = WallpaperManager.getInstance(context)
         check(manager.isWallpaperSupported) { "Wallpaper service is not supported on this device." }
         check(manager.isSetWallpaperAllowed) { "The device administrator or system policy prevents changing wallpaper." }
-        context.contentResolver.openInputStream(uri).use { stream ->
-            requireNotNull(stream) { "Unable to open selected image." }
-            manager.setStream(stream, null, true, target)
+        val stream = requireNotNull(context.contentResolver.openInputStream(uri)) {
+            "Unable to open selected image."
         }
+        stream.use { manager.setStream(it, null, true, target) }
+        Unit
     }
 }
