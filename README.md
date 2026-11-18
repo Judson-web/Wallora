@@ -20,10 +20,11 @@ Wallora currently includes:
 - A still-image editor with Fill/Fit composition, a 3×3 focal-position grid, quarter-turn rotation, brightness, contrast, saturation, and a dim overlay.
 - Screen-shaped JPEG rendering, export through Android's Create Document flow, and direct application of the rendered result to Home, Lock, or both.
 - A video live-wallpaper service with looping, mute/unmute, Fill/Fit framing, and 0.5×–2× playback speed.
+- An animated GIF library preview and a looping GIF live-wallpaper service with Fill/Fit framing.
 - Optional All files access settings handoff. Core import and folder scanning do not require it.
 - Edge-to-edge activity layout and an Android 17 GitHub Actions debug-build workflow.
 
-The still-image editor renders composition, focal position, rotation, brightness, contrast, saturation, and dim level into a new JPEG. The 3×3 focal grid is the current positioning control; draggable freeform crop, undo/redo, and non-destructive edit history remain planned. GIF files are recognised in the library but are not yet animated as live wallpapers.
+The still-image editor renders composition, focal position, rotation, brightness, contrast, saturation, and dim level into a new JPEG. The 3×3 focal grid is the current positioning control; draggable freeform crop, undo/redo, and non-destructive edit history remain planned. GIF files are animated in library previews and can be launched into the dedicated GIF WallpaperService. GIF playback is silent and uses Android's legacy Movie decoder, so very large/high-frame-rate files and device-specific performance still need testing.
 
 ## Design plan
 
@@ -90,7 +91,7 @@ SIGNING.md
 1. Media-library polish: thumbnail caching, sorting, metadata detail, stale-permission recovery, and large-library performance.
 2. Studio expansion: draggable focal positioning, freeform crop, colour controls, undo/redo, and edit history.
 3. Live-wallpaper hardening: decoder error recovery, lifecycle and battery profiling, and OEM/device compatibility tests.
-4. Animated media: GIF and image-sequence live-wallpaper rendering.
+4. Animated media: improve GIF frame pacing, memory bounds, and animated image-sequence support.
 5. Release hardening: automated tests, accessibility, performance profiling, privacy review, and store-policy compliance.
 
 ## License
