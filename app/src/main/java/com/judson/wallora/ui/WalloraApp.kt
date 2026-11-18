@@ -317,6 +317,9 @@ private fun StudioScreen(
     val videoPreferences = remember(context) {
         context.getSharedPreferences("wallora", Context.MODE_PRIVATE)
     }
+    var gifFill by remember(item?.uri) {
+        mutableStateOf(videoPreferences.getBoolean("gif_fill", true))
+    }
     var videoMuted by remember(item?.uri) {
         mutableStateOf(videoPreferences.getBoolean("video_muted", true))
     }
@@ -330,7 +333,6 @@ private fun StudioScreen(
     var brightness by remember(item?.uri) { mutableFloatStateOf(0f) }
     var contrast by remember(item?.uri) { mutableFloatStateOf(1f) }
     var saturation by remember(item?.uri) { mutableFloatStateOf(1f) }
-    val focusPoint = FOCAL_COORDINATES[focusIndex]
     val normalizedRotation = ((rotation % 360) + 360) % 360
     val rotatedFocusIndex = FOCAL_ROTATION_MAPS[normalizedRotation]?.get(focusIndex) ?: focusIndex
     val renderFocusPoint = FOCAL_COORDINATES[rotatedFocusIndex]
@@ -694,9 +696,59 @@ private fun StudioScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        } else if (selectedItem.kind == MediaKind.GIF) {
+            Text("Animated GIF wallpaper", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "The animation loops silently. Choose how it fills the screen.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = gifFill,
+                    onClick = {
+                        gifFill = true
+                        videoPreferences.edit().putBoolean("gif_fill", true).apply()
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                ) { Text("Fill") }
+                SegmentedButton(
+                    selected = !gifFill,
+                    onClick = {
+                        gifFill = false
+                        videoPreferences.edit().putBoolean("gif_fill", false).apply()
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                ) { Text("Fit") }
+            }
+            Button(onClick = {
+                videoPreferences.edit()
+                    .putString("active_gif_uri", selectedItem.uri.toString())
+                    .putBoolean("gif_fill", gifFill)
+                    .apply()
+                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                    putExtra(
+                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(context, GifWallpaperService::class.java)
+                    )
+                }
+                runCatching { context.startActivity(intent) }
+                    .onFailure {
+                        onStatus("Animated GIF preview is unavailable on this device. Try the system chooser.")
+                    }
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.Image, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Preview animated wallpaper in Android")
+            }
+            Text(
+                "Large or high-frame-rate GIFs may consume more memory and battery.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         } else {
             Text(
-                "GIF rendering is not available yet. Choose a still image or video for the current editor.",
+                "This file type cannot be rendered as a wallpaper.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
