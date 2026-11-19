@@ -198,9 +198,12 @@ private fun LibraryScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("All") }
+    var sortOrder by remember { mutableStateOf("Recently added") }
+    var sortExpanded by remember { mutableStateOf(false) }
     val filters = listOf("All", "Images", "Videos", "GIFs", "Favourites")
-    val visibleItems = remember(items, query, filter) {
-        items.filter { item ->
+    val sortOrders = listOf("Recently added", "Name A–Z", "Name Z–A", "Media type", "Favourites first")
+    val visibleItems = remember(items, query, filter, sortOrder) {
+        val filtered = items.filter { item ->
             val matchesQuery = item.displayName.contains(query, ignoreCase = true)
             val matchesFilter = when (filter) {
                 "Images" -> item.kind == MediaKind.IMAGE || item.kind == MediaKind.GIF
@@ -210,6 +213,13 @@ private fun LibraryScreen(
                 else -> true
             }
             matchesQuery && matchesFilter
+        }
+        when (sortOrder) {
+            "Name A–Z" -> filtered.sortedBy { it.displayName.lowercase() }
+            "Name Z–A" -> filtered.sortedByDescending { it.displayName.lowercase() }
+            "Media type" -> filtered.sortedWith(compareBy<MediaItem> { it.kind.ordinal }.thenBy { it.displayName.lowercase() })
+            "Favourites first" -> filtered.sortedWith(compareByDescending<MediaItem> { it.isFavorite }.thenBy { it.displayName.lowercase() })
+            else -> filtered
         }
     }
 
@@ -235,6 +245,30 @@ private fun LibraryScreen(
             }
         }
         Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("${visibleItems.size} wallpapers", style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box {
+                TextButton(onClick = { sortExpanded = true }) {
+                    Text("Sort: $sortOrder")
+                }
+                DropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
+                    sortOrders.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = { sortOrder = option; sortExpanded = false },
+                            trailingIcon = {
+                                if (sortOrder == option) Text("✓", color = MaterialTheme.colorScheme.primary)
+                            }
+                        )
+                    }
+                }
+            }
+        }
         if (visibleItems.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally,
