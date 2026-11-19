@@ -1047,7 +1047,7 @@ private fun SettingsScreen(
                             scanProgress = 0
                             try {
                                 val found = withContext(Dispatchers.IO) {
-                                    MediaRepository.scanAllSharedStorage(context) { count -> scanProgress = count }
+                                    MediaRepository.scanAllSharedStorage(context) { count -> scope.launch { scanProgress = count } }
                                 }
                                 onMediaIndexed(found)
                                 onStatus("Storage scan complete: ${found.size} supported media item(s) indexed.")
