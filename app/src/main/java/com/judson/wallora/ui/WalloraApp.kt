@@ -1,5 +1,6 @@
 package com.judson.wallora.ui
 
+import android.Manifest
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
@@ -41,6 +42,10 @@ import androidx.compose.ui.graphics.ColorMatrix as ComposeColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +88,8 @@ fun WalloraApp() {
     var selected by remember { mutableStateOf(items.firstOrNull()) }
     var tab by remember { mutableStateOf(WalloraTab.LIBRARY) }
     var status by remember { mutableStateOf("Your wallpapers stay on your device.") }
+    val appearancePreferences = remember(context) { context.getSharedPreferences("wallora", Context.MODE_PRIVATE) }
+    var themeMode by remember { mutableStateOf(appearancePreferences.getString("theme_mode", "system") ?: "system") }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         uris.forEach { uri ->
@@ -94,9 +101,15 @@ fun WalloraApp() {
         if (uris.isNotEmpty()) status = "Added ${uris.size} item(s) to your library."
     }
 
-    MaterialTheme(
-        colorScheme = if (androidx.compose.foundation.isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
-    ) {
+    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val useDarkTheme = when (themeMode) { "dark" -> true; "light" -> false; else -> systemDark }
+    val walloraColorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+    } else {
+        if (useDarkTheme) darkColorScheme() else lightColorScheme()
+    }
+
+    MaterialTheme(colorScheme = walloraColorScheme) {
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -157,6 +170,11 @@ fun WalloraApp() {
                 WalloraTab.SETTINGS -> SettingsScreen(
                     modifier = Modifier.padding(padding), context = context,
                     status = status,
+                    themeMode = themeMode,
+                    onThemeModeChanged = { mode ->
+                        themeMode = mode
+                        appearancePreferences.edit().putString("theme_mode", mode).apply()
+                    },
                     onStatus = { status = it },
                     onMediaIndexed = { found ->
                         MediaLibraryStore.addAll(context, found)
@@ -323,6 +341,9 @@ private fun StudioScreen(
     }
     var videoMuted by remember(item?.uri) {
         mutableStateOf(videoPreferences.getBoolean("video_muted", true))
+    }
+    var videoLoop by remember(item?.uri) {
+        mutableStateOf(videoPreferences.getBoolean("video_loop", true))
     }
     var videoFill by remember(item?.uri) {
         mutableStateOf(videoPreferences.getBoolean("video_fill", true))
@@ -654,6 +675,17 @@ private fun StudioScreen(
                     }
                 )
             }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Loop video", style = MaterialTheme.typography.bodyLarge)
+                    Text("Repeat continuously or stop at the final frame.", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = videoLoop, onCheckedChange = {
+                    videoLoop = it
+                    videoPreferences.edit().putBoolean("video_loop", it).apply()
+                })
+            }
             Text("Video framing", style = MaterialTheme.typography.bodyMedium)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                 SegmentedButton(
@@ -687,6 +719,7 @@ private fun StudioScreen(
                 videoPreferences.edit()
                     .putString("active_video_uri", selectedItem.uri.toString())
                     .putBoolean("video_muted", videoMuted)
+                    .putBoolean("video_loop", videoLoop)
                     .putBoolean("video_fill", videoFill)
                     .putFloat("video_speed", videoSpeed)
                     .apply()
@@ -781,6 +814,8 @@ private fun SettingsScreen(
     modifier: Modifier = Modifier,
     context: Context,
     status: String,
+    themeMode: String,
+    onThemeModeChanged: (String) -> Unit,
     onStatus: (String) -> Unit,
     onMediaIndexed: (List<MediaItem>) -> Unit
 ) {
@@ -791,7 +826,23 @@ private fun SettingsScreen(
         )
     }
     var scanning by remember { mutableStateOf(false) }
+    var scanProgress by remember { mutableIntStateOf(0) }
+    var hasAllFiles by remember { mutableStateOf(hasFullStorageAccess(context)) }
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) hasAllFiles = hasFullStorageAccess(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasAllFiles = granted || hasFullStorageAccess(context)
+        onStatus(if (hasAllFiles) "Shared-storage access is enabled." else "Storage permission was not granted.")
+    }
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -831,7 +882,7 @@ private fun SettingsScreen(
                 }
                 if (folderUri != null) {
                     Text(
-                        "A folder is connected. Scanning is limited to 2,500 supported files per pass.",
+                        "A folder is connected. Wallora scans nested folders for supported images, GIFs, and videos.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -864,32 +915,86 @@ private fun SettingsScreen(
                 OutlinedButton(
                     onClick = {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                            val appSettings = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                                 data = Uri.parse("package:${context.packageName}")
                             }
-                            runCatching { context.startActivity(intent) }
-                                .onFailure { onStatus("Could not open All files access settings.") }
-                        } else onStatus("All files access is not available on this Android version.")
+                            runCatching { context.startActivity(appSettings) }.onFailure {
+                                runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+                                    .onFailure { onStatus("Android storage settings could not be opened.") }
+                            }
+                        } else {
+                            legacyStoragePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (hasAllFiles) "All files access: enabled" else "Manage All files access")
+                    Text(if (hasAllFiles) "Manage shared-storage access" else "Grant full shared-storage access")
+                }
+                Button(
+                    onClick = {
+                        scope.launch {
+                            scanning = true
+                            scanProgress = 0
+                            try {
+                                val found = withContext(Dispatchers.IO) {
+                                    MediaRepository.scanAllSharedStorage(context) { count -> scanProgress = count }
+                                }
+                                onMediaIndexed(found)
+                                onStatus("Storage scan complete: ${found.size} supported media item(s) indexed.")
+                            } catch (error: Exception) {
+                                onStatus("Storage scan failed: ${error.message ?: "unknown error"}")
+                            } finally {
+                                scanning = false
+                            }
+                        }
+                    },
+                    enabled = hasAllFiles && !scanning,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(if (scanning) "Scanning… $scanProgress found" else "Scan all accessible storage")
                 }
                 Text(
-                    "All files access is optional and subject to Google Play policy. Android still protects some system and app-private folders. Folder access works independently through Android's document picker.",
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+                        "This sideloaded build can index shared storage after you enable Android's All files access. Android itself still blocks protected app-private Android/data and Android/obb folders. Your selected folders remain available as a separate access method."
+                    else
+                        "On Android 10 and earlier, grant storage permission to index shared files. Folder access is also available through Android's document picker.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
         ElevatedCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Appearance", style = MaterialTheme.typography.titleMedium)
+                Text("Choose how Wallora follows your device.", color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall)
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEachIndexed { index, option ->
+                        SegmentedButton(
+                            selected = themeMode == option.first,
+                            onClick = { onThemeModeChanged(option.first) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = 3)
+                        ) { Text(option.second) }
+                    }
+                }
+            }
+        }
+        ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("About Wallora", style = MaterialTheme.typography.titleMedium)
                 Text("Wallora Premium • app.wallora.premium")
-                Text("Version 0.2.0 • Android 8.0+ baseline • Android 17 target")
+                Text("Version 0.3.0 • Android 8.0+ baseline • Android 17 target")
                 Text("Live wallpaper support depends on Android, the system wallpaper service, and the device launcher.")
             }
         }
         Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
     }
 }
+
+private fun hasFullStorageAccess(context: Context): Boolean =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        Environment.isExternalStorageManager()
+    } else {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
