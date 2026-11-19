@@ -28,7 +28,7 @@ Wallora currently includes:
 - Persistent System, Light, and Dark appearance modes using Material You dynamic colours where supported.
 - Edge-to-edge activity layout and an Android 17 GitHub Actions debug-build workflow.
 
-The still-image editor renders composition, focal position, rotation, brightness, contrast, saturation, and dim level into a new JPEG. The 3×3 focal grid is the current positioning control; draggable freeform crop, undo/redo, and non-destructive edit history remain planned. GIF files are animated in library previews and can be launched into the dedicated GIF WallpaperService. GIF playback is silent and uses Android's legacy Movie decoder, with a 32 MB encoded-file cap and a 16-megapixel decoded-size cap. High-frame-rate files and device-specific performance still need testing.
+The still-image editor renders composition, focal position, rotation, brightness, contrast, saturation, and dim level into a new JPEG. Gesture-based positioning and zoom are available alongside the 3×3 focal fallback. Before/after comparison and an in-session undo/redo stack cover adjustment changes; zoom and pan are persisted per wallpaper and included in rendered exports and wallpaper application. GIF files are animated in library previews and can be launched into the dedicated GIF WallpaperService. GIF playback is silent and uses Android's legacy Movie decoder, with a 32 MB encoded-file cap and a 16-megapixel decoded-size cap. High-frame-rate files and device-specific performance still need testing.
 
 ## Design plan
 
