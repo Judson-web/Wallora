@@ -643,12 +643,12 @@ private fun StudioScreen(
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             SegmentedButton(
                 selected = fill,
-                onClick = { fill = true },
+                onClick = { fill = true; saveHistory() },
                 shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
             ) { Text("Fill") }
             SegmentedButton(
                 selected = !fill,
-                onClick = { fill = false },
+                onClick = { fill = false; saveHistory() },
                 shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
             ) { Text("Fit") }
         }
@@ -668,7 +668,7 @@ private fun StudioScreen(
                         val index = rowIndex * 3 + columnIndex
                         FilterChip(
                             selected = focusIndex == index,
-                            onClick = { focusIndex = index },
+                            onClick = { focusIndex = index; saveHistory() },
                             modifier = Modifier.weight(1f),
                             label = {
                                 Text(
@@ -683,7 +683,7 @@ private fun StudioScreen(
             }
         }
         OutlinedButton(
-            onClick = { rotation = (rotation + 90) % 360 },
+            onClick = { rotation = (rotation + 90) % 360; saveHistory() },
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Rotate 90°  •  Current: ${rotation}°")
