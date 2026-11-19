@@ -34,7 +34,10 @@ object WallpaperImageRenderer {
         focusY: Float = 0.5f,
         brightness: Float = 0f,
         contrast: Float = 1f,
-        saturation: Float = 1f
+        saturation: Float = 1f,
+        zoom: Float = 1f,
+        panX: Float = 0f,
+        panY: Float = 0f
     ): Bitmap {
         val decoded = decode(context, sourceUri)
         try {
@@ -68,12 +71,13 @@ object WallpaperImageRenderer {
             val scaleX = outputWidth.toFloat() / rotatedWidth
             val scaleY = outputHeight.toFloat() / rotatedHeight
             val scale = if (fill) max(scaleX, scaleY) else min(scaleX, scaleY)
-            val drawnWidth = rotatedWidth * scale
-            val drawnHeight = rotatedHeight * scale
+            val safeZoom = zoom.coerceIn(1f, 4f)
+            val drawnWidth = rotatedWidth * scale * safeZoom
+            val drawnHeight = rotatedHeight * scale * safeZoom
             val anchorX = if (fill) focusX.coerceIn(0f, 1f) else 0.5f
             val anchorY = if (fill) focusY.coerceIn(0f, 1f) else 0.5f
-            val drawLeft = (outputWidth - drawnWidth) * anchorX
-            val drawTop = (outputHeight - drawnHeight) * anchorY
+            val drawLeft = (outputWidth - drawnWidth) * anchorX + panX.coerceIn(-1f, 1f) * outputWidth
+            val drawTop = (outputHeight - drawnHeight) * anchorY + panY.coerceIn(-1f, 1f) * outputHeight
 
             val safeContrast = contrast.coerceIn(0.5f, 1.5f)
             val safeSaturation = saturation.coerceIn(0f, 2f)
@@ -99,7 +103,7 @@ object WallpaperImageRenderer {
             canvas.save()
             canvas.translate(drawLeft + drawnWidth / 2f, drawTop + drawnHeight / 2f)
             canvas.rotate(normalizedRotation.toFloat())
-            canvas.scale(scale, scale)
+            canvas.scale(scale * safeZoom, scale * safeZoom)
             canvas.drawBitmap(decoded, -decoded.width / 2f, -decoded.height / 2f, imagePaint)
             canvas.restore()
 
