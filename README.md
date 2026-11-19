@@ -19,7 +19,7 @@ Wallora currently includes:
 - Recursive SAF folder indexing without an artificial file-count ceiling.
 - Full shared-storage indexing across readable internal and removable volumes after Android All files access is granted, with live scan feedback and cancellation. The scanner de-duplicates mounted paths, and includes nested media folders while respecting Android-protected app-private directories.
 - Library sorting by recently added, name in either direction, media type, and favourites first.
-- A still-image editor with Fill/Fit composition, a 3×3 focal-position grid, quarter-turn rotation, brightness, contrast, saturation, and a dim overlay.
+- A still-image editor with Fill/Fit composition, drag-to-position and pinch-to-zoom (1×–4×), a 3×3 focal fallback, quarter-turn rotation, brightness, contrast, saturation, dim overlay, before/after comparison, and bounded undo/redo history.
 - Screen-shaped JPEG rendering, export through Android's Create Document flow, and direct application of the rendered result to Home, Lock, or both.
 - An in-editor playable video preview with native playback controls and live synchronization of mute, loop, framing, and speed settings.
 - A video live-wallpaper service with looping, mute/unmute, Fill/Fit framing, and 0.5×–2× playback speed.
