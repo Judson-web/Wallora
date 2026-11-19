@@ -891,7 +891,6 @@ private fun SettingsScreen(
             }.onFailure { onStatus("Could not retain folder access: ${it.message}") }
         }
     }
-    val hasAllFiles = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()
 
     Column(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
