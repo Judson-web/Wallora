@@ -361,6 +361,7 @@ private fun StudioScreen(
     var fill by remember(item?.uri) { mutableStateOf(true) }
     var dim by remember(item?.uri) { mutableFloatStateOf(0f) }
     var rotation by remember(item?.uri) { mutableIntStateOf(0) }
+    var studioPage by remember(item?.uri) { mutableStateOf("Adjust") }
     val videoPreferences = remember(context) {
         context.getSharedPreferences("wallora", Context.MODE_PRIVATE)
     }
@@ -565,7 +566,23 @@ private fun StudioScreen(
             }
         }
 
+        val studioPages = if (selectedItem.kind == MediaKind.IMAGE) {
+            listOf("Placement", "Adjust", "Apply")
+        } else {
+            listOf("Playback", "Apply")
+        }
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            studioPages.forEachIndexed { index, page ->
+                SegmentedButton(
+                    selected = studioPage == page,
+                    onClick = { studioPage = page },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = studioPages.size)
+                ) { Text(page) }
+            }
+        }
+
         if (selectedItem.kind == MediaKind.IMAGE) {
+        if (studioPage == "Placement") {
         Text("Composition", style = MaterialTheme.typography.titleMedium)
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             SegmentedButton(
@@ -609,6 +626,14 @@ private fun StudioScreen(
                 }
             }
         }
+        OutlinedButton(
+            onClick = { rotation = (rotation + 90) % 360 },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Rotate 90°  •  Current: ${rotation}°")
+        }
+        }
+        if (studioPage == "Adjust") {
         Text("Brightness  •  ${(brightness * 100).toInt()}%")
         Slider(
             value = brightness,
@@ -630,13 +655,6 @@ private fun StudioScreen(
             valueRange = 0f..2f,
             steps = 9
         )
-        OutlinedButton(
-            onClick = { rotation = (rotation + 90) % 360 },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Rotate 90°  •  Current: ${rotation}°")
-        }
-
         Text("Dim overlay  •  ${(dim * 100).toInt()}%")
         Slider(value = dim, onValueChange = { dim = it }, valueRange = 0f..0.8f)
         OutlinedButton(
@@ -653,8 +671,9 @@ private fun StudioScreen(
         ) { Text("Reset image edits") }
 
         }
+        }
 
-        if (selectedItem.kind == MediaKind.IMAGE) {
+        if (selectedItem.kind == MediaKind.IMAGE && studioPage == "Apply") {
             Text(
                 "The editor renders a screen-shaped image. Fill crops to the screen; Fit keeps the whole image with a dark canvas.",
                 style = MaterialTheme.typography.bodySmall,
@@ -681,7 +700,7 @@ private fun StudioScreen(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Set both screens") }
-        } else if (selectedItem.kind == MediaKind.VIDEO) {
+        } else if (selectedItem.kind == MediaKind.VIDEO && studioPage == "Playback") {
             Text("Live video controls", style = MaterialTheme.typography.titleMedium)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -776,7 +795,7 @@ private fun StudioScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        } else if (selectedItem.kind == MediaKind.GIF) {
+        } else if (selectedItem.kind == MediaKind.GIF && studioPage == "Playback") {
             Text("Animated GIF wallpaper", style = MaterialTheme.typography.titleMedium)
             Text(
                 "The animation loops silently. Choose how it fills the screen.",
@@ -826,11 +845,41 @@ private fun StudioScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        } else {
-            Text(
-                "This file type cannot be rendered as a wallpaper.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        } else if (studioPage == "Apply" && selectedItem.kind == MediaKind.VIDEO) {
+            Text("Ready to apply", style = MaterialTheme.typography.titleMedium)
+            Text("Android will show its live-wallpaper preview so you can confirm the video wallpaper.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = {
+                videoPreferences.edit()
+                    .putString("active_video_uri", selectedItem.uri.toString())
+                    .putBoolean("video_muted", videoMuted)
+                    .putBoolean("video_loop", videoLoop)
+                    .putBoolean("video_fill", videoFill)
+                    .putFloat("video_speed", videoSpeed)
+                    .apply()
+                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                    putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(context, VideoWallpaperService::class.java))
+                }
+                runCatching { context.startActivity(intent) }
+                    .onFailure { onStatus("Android live-wallpaper preview could not be opened.") }
+            }, modifier = Modifier.fillMaxWidth()) { Text("Preview and apply video wallpaper") }
+        } else if (studioPage == "Apply" && selectedItem.kind == MediaKind.GIF) {
+            Text("Ready to apply", style = MaterialTheme.typography.titleMedium)
+            Text("Android will show its live-wallpaper preview so you can confirm the animated wallpaper.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = {
+                videoPreferences.edit().putString("active_gif_uri", selectedItem.uri.toString())
+                    .putBoolean("gif_fill", gifFill).apply()
+                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                    putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                        ComponentName(context, GifWallpaperService::class.java))
+                }
+                runCatching { context.startActivity(intent) }
+                    .onFailure { onStatus("Android live-wallpaper preview could not be opened.") }
+            }, modifier = Modifier.fillMaxWidth()) { Text("Preview and apply GIF wallpaper") }
+        } else if (studioPage == "Playback" && selectedItem.kind !in listOf(MediaKind.VIDEO, MediaKind.GIF)) {
+            Text("No playback controls are available for this media.")
         }
 
         Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
