@@ -8,16 +8,25 @@ import android.provider.OpenableColumns
 import androidx.documentfile.provider.DocumentFile
 
 object MediaRepository {
+    private val SUPPORTED_EXTENSIONS = setOf(
+        "jpg", "jpeg", "png", "webp", "bmp", "heic", "heif", "avif",
+        "gif", "mp4", "m4v", "mkv", "webm", "mov", "3gp", "ts"
+    )
     fun fromDocument(resolver: ContentResolver, uri: Uri): MediaItem {
         val name = resolver.query(uri, null, null, null, null)?.use { cursor ->
             val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (cursor.moveToFirst() && index >= 0) cursor.getString(index) else null
         } ?: "Selected media"
         val mime = resolver.getType(uri)
+        val extension = name.substringAfterLast('.', "").lowercase()
         val kind = when {
-            mime == "image/gif" -> MediaKind.GIF
-            mime?.startsWith("image/") == true -> MediaKind.IMAGE
-            mime?.startsWith("video/") == true -> MediaKind.VIDEO
+            mime == "image/gif" || extension == "gif" -> MediaKind.GIF
+            mime?.startsWith("image/") == true ||
+                extension in setOf("jpg", "jpeg", "png", "webp", "bmp", "heic", "heif", "avif") ->
+                MediaKind.IMAGE
+            mime?.startsWith("video/") == true ||
+                extension in setOf("mp4", "m4v", "mkv", "webm", "mov", "3gp", "ts") ->
+                MediaKind.VIDEO
             else -> MediaKind.UNKNOWN
         }
         return MediaItem(uri, name, mime, kind)
@@ -54,7 +63,11 @@ object MediaRepository {
                     child.isFile -> {
                         val mime = runCatching { context.contentResolver.getType(child.uri) }
                             .getOrNull()
-                        if (mime?.startsWith("image/") == true || mime?.startsWith("video/") == true) {
+                        val extension = name.substringAfterLast('.', "").lowercase()
+                        if (mime?.startsWith("image/") == true ||
+                            mime?.startsWith("video/") == true ||
+                            extension in SUPPORTED_EXTENSIONS
+                        ) {
                             runCatching { fromDocument(context.contentResolver, child.uri) }
                                 .getOrNull()
                                 ?.takeIf { it.kind != MediaKind.UNKNOWN }
