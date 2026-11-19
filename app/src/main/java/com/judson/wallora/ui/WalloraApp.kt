@@ -1,6 +1,5 @@
 package com.judson.wallora.ui
 
-import android.Manifest
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
@@ -45,7 +44,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -103,11 +101,7 @@ fun WalloraApp() {
 
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     val useDarkTheme = when (themeMode) { "dark" -> true; "light" -> false; else -> systemDark }
-    val walloraColorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else {
-        if (useDarkTheme) darkColorScheme() else lightColorScheme()
-    }
+    val walloraColorScheme = if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
 
     MaterialTheme(colorScheme = walloraColorScheme) {
         Scaffold(
@@ -871,12 +865,6 @@ private fun SettingsScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    val legacyStoragePermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        hasAllFiles = granted || hasFullStorageAccess(context)
-        onStatus(if (hasAllFiles) "Shared-storage access is enabled." else "Storage permission was not granted.")
-    }
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -955,8 +943,6 @@ private fun SettingsScreen(
                                 runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
                                     .onFailure { onStatus("Android storage settings could not be opened.") }
                             }
-                        } else {
-                            legacyStoragePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -987,10 +973,7 @@ private fun SettingsScreen(
                     Text(if (scanning) "Scanning… $scanProgress found" else "Scan all accessible storage")
                 }
                 Text(
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
-                        "This sideloaded build can index shared storage after you enable Android's All files access. Android itself still blocks protected app-private Android/data and Android/obb folders. Your selected folders remain available as a separate access method."
-                    else
-                        "On Android 10 and earlier, grant storage permission to index shared files. Folder access is also available through Android's document picker.",
+                    "This Android 17 build can index shared storage after you enable All files access. Android itself still blocks protected app-private Android/data and Android/obb folders. Your selected folders remain available as a separate access method.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1024,10 +1007,4 @@ private fun SettingsScreen(
     }
 }
 
-private fun hasFullStorageAccess(context: Context): Boolean =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        Environment.isExternalStorageManager()
-    } else {
-        ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
+private fun hasFullStorageAccess(context: Context): Boolean = Environment.isExternalStorageManager()
