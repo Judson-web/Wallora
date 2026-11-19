@@ -219,7 +219,7 @@ private fun LibraryScreen(
             "Name Z–A" -> filtered.sortedByDescending { it.displayName.lowercase() }
             "Media type" -> filtered.sortedWith(compareBy<MediaItem> { it.kind.ordinal }.thenBy { it.displayName.lowercase() })
             "Favourites first" -> filtered.sortedWith(compareByDescending<MediaItem> { it.isFavorite }.thenBy { it.displayName.lowercase() })
-            else -> filtered
+            else -> filtered.asReversed()
         }
     }
 
