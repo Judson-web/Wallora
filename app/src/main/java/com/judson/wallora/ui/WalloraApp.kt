@@ -19,6 +19,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -399,8 +401,18 @@ private fun StudioScreen(
     var brightness by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "brightness", 0f)) }
     var contrast by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "contrast", 1f)) }
     var saturation by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "saturation", 1f)) }
+    var zoom by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "zoom", 1f).coerceIn(1f, 4f)) }
+    var panX by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "pan_x", 0f).coerceIn(-1f, 1f)) }
+    var panY by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "pan_y", 0f).coerceIn(-1f, 1f)) }
+    var compareOriginal by remember(item?.uri) { mutableStateOf(false) }
+    data class EditSnapshot(val fill: Boolean, val dim: Float, val rotation: Int, val focus: Int, val brightness: Float, val contrast: Float, val saturation: Float, val zoom: Float, val panX: Float, val panY: Float)
+    fun snapshot() = EditSnapshot(fill, dim, rotation, focusIndex, brightness, contrast, saturation, zoom, panX, panY)
+    var history by remember(item?.uri) { mutableStateOf(listOf(snapshot())) }
+    var historyIndex by remember(item?.uri) { mutableIntStateOf(0) }
+    fun saveHistory() { val current = snapshot(); if (history.getOrNull(historyIndex) != current) { history = (history.take(historyIndex + 1) + current).takeLast(40); historyIndex = history.lastIndex } }
+    fun restoreHistory(index: Int) { val state = history.getOrNull(index) ?: return; historyIndex = index; fill = state.fill; dim = state.dim; rotation = state.rotation; focusIndex = state.focus; brightness = state.brightness; contrast = state.contrast; saturation = state.saturation; zoom = state.zoom; panX = state.panX; panY = state.panY }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(editorKey, fill, dim, rotation, focusIndex, brightness, contrast, saturation) {
+    LaunchedEffect(editorKey, fill, dim, rotation, focusIndex, brightness, contrast, saturation, zoom, panX, panY) {
         editorPreferences.edit()
             .putBoolean(editorKey + "fill", fill)
             .putFloat(editorKey + "dim", dim)
@@ -409,6 +421,9 @@ private fun StudioScreen(
             .putFloat(editorKey + "brightness", brightness)
             .putFloat(editorKey + "contrast", contrast)
             .putFloat(editorKey + "saturation", saturation)
+            .putFloat(editorKey + "zoom", zoom)
+            .putFloat(editorKey + "pan_x", panX)
+            .putFloat(editorKey + "pan_y", panY)
             .apply()
     }
     val normalizedRotation = ((rotation % 360) + 360) % 360
@@ -449,7 +464,7 @@ private fun StudioScreen(
                     runCatching {
                         val rendered = WallpaperImageRenderer.render(
                             context, activeItem.uri, fill, dim, rotation,
-                            renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
+                            renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation, zoom, panX, panY
                         )
                         try {
                             val output = requireNotNull(context.contentResolver.openOutputStream(destination)) {
@@ -535,7 +550,7 @@ private fun StudioScreen(
                 runCatching {
                     val rendered = WallpaperImageRenderer.render(
                         context, selectedItem.uri, fill, dim, rotation,
-                        renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
+                        renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation, zoom, panX, panY
                     )
                     try {
                         StaticWallpaperController.apply(context, rendered, target).getOrThrow()
@@ -564,12 +579,14 @@ private fun StudioScreen(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { OutlinedButton(onClick = { compareOriginal = !compareOriginal }, modifier = Modifier.weight(1f)) { Text(if (compareOriginal) "Show edits" else "Before / after") }; OutlinedButton(onClick = { zoom = 1f; panX = 0f; panY = 0f; saveHistory() }, modifier = Modifier.weight(1f)) { Text("Reset view") } }
         Box(
             Modifier.fillMaxWidth().aspectRatio(
                 (context.resources.displayMetrics.widthPixels.toFloat() /
                     context.resources.displayMetrics.heightPixels.toFloat()).coerceIn(0.3f, 1.8f)
             ).clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .pointerInput(selectedItem.uri) { detectTransformGestures { _, pan, zoomChange, _ -> if (selectedItem.kind == MediaKind.IMAGE && !compareOriginal) { zoom = (zoom * zoomChange).coerceIn(1f, 4f); panX = (panX + pan.x / size.width.coerceAtLeast(1)).coerceIn(-1f, 1f); panY = (panY + pan.y / size.height.coerceAtLeast(1)).coerceIn(-1f, 1f) } } }
         ) {
             if (selectedItem.kind == MediaKind.VIDEO) {
                 AndroidView(
@@ -601,21 +618,21 @@ private fun StudioScreen(
                     AsyncImage(
                         model = selectedItem.uri,
                         contentDescription = "Wallpaper preview",
-                        modifier = imageModifier,
-                        alignment = if (fill) FOCAL_ALIGNMENTS[rotatedFocusIndex] else Alignment.Center,
-                        colorFilter = previewColorFilter,
-                        contentScale = if (fill) ContentScale.Crop else ContentScale.Fit
+                        modifier = imageModifier.graphicsLayer { if (!compareOriginal) { scaleX = zoom; scaleY = zoom; translationX = panX * size.width; translationY = panY * size.height } },
+                        alignment = if (fill && !compareOriginal) FOCAL_ALIGNMENTS[rotatedFocusIndex] else Alignment.Center,
+                        colorFilter = if (compareOriginal) null else previewColorFilter,
+                        contentScale = if (fill && !compareOriginal) ContentScale.Crop else ContentScale.Fit
                     )
                 }
             }
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
+            if (!compareOriginal) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = dim)))
             Surface(
                 modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
                 shape = RoundedCornerShape(50)
             ) {
                 Text(
-                    "PREVIEW  •  ${rotation}°",
+                    if (compareOriginal) "ORIGINAL" else "PREVIEW  •  ${rotation}°  •  ${zoom.toInt()}×",
                     Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                     style = MaterialTheme.typography.labelSmall
                 )
@@ -690,29 +707,33 @@ private fun StudioScreen(
         }
         }
         if (studioPage == "Adjust") {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { if (historyIndex > 0) restoreHistory(historyIndex - 1) }, enabled = historyIndex > 0, modifier = Modifier.weight(1f)) { Text("Undo") }; OutlinedButton(onClick = { if (historyIndex < history.lastIndex) restoreHistory(historyIndex + 1) }, enabled = historyIndex < history.lastIndex, modifier = Modifier.weight(1f)) { Text("Redo") } }
         Text("Brightness  •  ${(brightness * 100).toInt()}%")
         Slider(
             value = brightness,
             onValueChange = { brightness = it },
             valueRange = -0.3f..0.3f,
-            steps = 11
+            steps = 11,
+            onValueChangeFinished = { saveHistory() }
         )
         Text("Contrast  •  ${(contrast * 100).toInt()}%")
         Slider(
             value = contrast,
             onValueChange = { contrast = it },
             valueRange = 0.5f..1.5f,
-            steps = 9
+            steps = 9,
+            onValueChangeFinished = { saveHistory() }
         )
         Text("Saturation  •  ${(saturation * 100).toInt()}%")
         Slider(
             value = saturation,
             onValueChange = { saturation = it },
             valueRange = 0f..2f,
-            steps = 9
+            steps = 9,
+            onValueChangeFinished = { saveHistory() }
         )
         Text("Dim overlay  •  ${(dim * 100).toInt()}%")
-        Slider(value = dim, onValueChange = { dim = it }, valueRange = 0f..0.8f)
+        Slider(value = dim, onValueChange = { dim = it }, valueRange = 0f..0.8f, onValueChangeFinished = { saveHistory() })
         OutlinedButton(
             onClick = {
                 fill = true
@@ -722,6 +743,10 @@ private fun StudioScreen(
                 brightness = 0f
                 contrast = 1f
                 saturation = 1f
+                zoom = 1f
+                panX = 0f
+                panY = 0f
+                saveHistory()
             },
             modifier = Modifier.fillMaxWidth()
         ) { Text("Reset image edits") }
@@ -1103,7 +1128,7 @@ private fun SettingsScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("About Wallora", style = MaterialTheme.typography.titleMedium)
                 Text("Wallora Premium • app.wallora.premium")
-                Text("Version 0.5.0 • Android 17 / API 37 only")
+                Text("Version 0.6.0 • Android 17 / API 37 only")
                 Text("Live wallpaper support depends on Android, the system wallpaper service, and the device launcher.")
                 Divider()
                 Text("Privacy", style = MaterialTheme.typography.titleSmall)
