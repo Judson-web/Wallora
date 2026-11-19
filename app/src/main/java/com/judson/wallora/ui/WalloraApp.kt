@@ -334,6 +334,7 @@ private fun StudioScreen(
     var brightness by remember(item?.uri) { mutableFloatStateOf(0f) }
     var contrast by remember(item?.uri) { mutableFloatStateOf(1f) }
     var saturation by remember(item?.uri) { mutableFloatStateOf(1f) }
+    val scope = rememberCoroutineScope()
     val normalizedRotation = ((rotation % 360) + 360) % 360
     val rotatedFocusIndex = FOCAL_ROTATION_MAPS[normalizedRotation]?.get(focusIndex) ?: focusIndex
     val renderFocusPoint = FOCAL_COORDINATES[rotatedFocusIndex]
@@ -366,33 +367,38 @@ private fun StudioScreen(
         } else if (activeItem == null) {
             onStatus("Choose an image before exporting.")
         } else {
-            val result = runCatching {
-                val rendered = WallpaperImageRenderer.render(
-                    context, activeItem.uri, fill, dim, rotation,
-                    renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
-                )
-                try {
-                    val output = requireNotNull(context.contentResolver.openOutputStream(destination)) {
-                        "The selected destination could not be opened."
+            onStatus("Rendering edited image…")
+            scope.launch {
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val rendered = WallpaperImageRenderer.render(
+                            context, activeItem.uri, fill, dim, rotation,
+                            renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
+                        )
+                        try {
+                            val output = requireNotNull(context.contentResolver.openOutputStream(destination)) {
+                                "The selected destination could not be opened."
+                            }
+                            output.use { WallpaperImageRenderer.writeJpeg(rendered, it) }
+                        } finally {
+                            rendered.recycle()
+                        }
+                        MediaRepository.persistReadPermission(
+                            context.contentResolver,
+                            destination,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                        )
+                        MediaRepository.fromDocument(context.contentResolver, destination)
                     }
-                    output.use { WallpaperImageRenderer.writeJpeg(rendered, it) }
-                } finally {
-                    rendered.recycle()
                 }
-                MediaRepository.persistReadPermission(
-                    context.contentResolver,
-                    destination,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                result.fold(
+                    { saved ->
+                        onExportComplete(saved)
+                        onStatus("Edited copy saved to your selected location.")
+                    },
+                    { error -> onStatus("Export failed: ${error.message ?: "unknown error"}") }
                 )
-                MediaRepository.fromDocument(context.contentResolver, destination)
             }
-            result.fold(
-                { saved ->
-                    onExportComplete(saved)
-                    onStatus("Edited copy saved to your selected location.")
-                },
-                { error -> onStatus("Export failed: ${error.message ?: "unknown error"}") }
-            )
         }
     }
 
@@ -413,23 +419,28 @@ private fun StudioScreen(
 
     val selectedItem = item
     fun applyEdited(target: Int) {
-        val result = runCatching {
-            val rendered = WallpaperImageRenderer.render(
-                context, selectedItem.uri, fill, dim, rotation,
-                renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
-            )
-            try {
-                StaticWallpaperController.apply(context, rendered, target).getOrThrow()
-            } finally {
-                rendered.recycle()
+        onStatus("Rendering wallpaper…")
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val rendered = WallpaperImageRenderer.render(
+                        context, selectedItem.uri, fill, dim, rotation,
+                        renderFocusPoint.first, renderFocusPoint.second, brightness, contrast, saturation
+                    )
+                    try {
+                        StaticWallpaperController.apply(context, rendered, target).getOrThrow()
+                    } finally {
+                        rendered.recycle()
+                    }
+                }
             }
-        }
-        onStatus(
-            result.fold(
-                { "Rendered wallpaper applied successfully." },
-                { "Could not apply wallpaper: ${it.message ?: "unknown error"}" }
+            onStatus(
+                result.fold(
+                    { "Rendered wallpaper applied successfully." },
+                    { "Could not apply wallpaper: ${it.message ?: "unknown error"}" }
+                )
             )
-        )
+        }
     }
 
     Column(
