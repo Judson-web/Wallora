@@ -51,6 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
+import com.judson.wallora.BuildConfig
 import com.judson.wallora.data.MediaItem
 import com.judson.wallora.data.MediaKind
 import com.judson.wallora.data.MediaLibraryStore
@@ -831,6 +832,10 @@ private fun StudioScreen(
                 runCatching { context.startActivity(intent) }
                     .onFailure { onStatus("Android live-wallpaper preview could not be opened.") }
             }, modifier = Modifier.fillMaxWidth()) { Text("Preview and apply video wallpaper") }
+            OutlinedButton(onClick = {
+                runCatching { context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)) }
+                    .onFailure { onStatus("Android live wallpaper chooser is unavailable.") }
+            }, modifier = Modifier.fillMaxWidth()) { Text("Open Android live wallpaper chooser") }
         } else if (studioPage == "Apply" && selectedItem.kind == MediaKind.GIF) {
             Text("Ready to apply", style = MaterialTheme.typography.titleMedium)
             Text("Android will show its live-wallpaper preview so you can confirm the animated wallpaper.",
@@ -845,6 +850,10 @@ private fun StudioScreen(
                 runCatching { context.startActivity(intent) }
                     .onFailure { onStatus("Android live-wallpaper preview could not be opened.") }
             }, modifier = Modifier.fillMaxWidth()) { Text("Preview and apply GIF wallpaper") }
+            OutlinedButton(onClick = {
+                runCatching { context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)) }
+                    .onFailure { onStatus("Android live wallpaper chooser is unavailable.") }
+            }, modifier = Modifier.fillMaxWidth()) { Text("Open Android live wallpaper chooser") }
         } else if (studioPage == "Playback" && selectedItem.kind !in listOf(MediaKind.VIDEO, MediaKind.GIF)) {
             Text("No playback controls are available for this media.")
         }
@@ -1041,8 +1050,13 @@ private fun SettingsScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("About Wallora", style = MaterialTheme.typography.titleMedium)
                 Text("Wallora Premium • app.wallora.premium")
-                Text("Version 0.3.0 • Android 8.0+ baseline • Android 17 target")
+                Text("Version ${BuildConfig.VERSION_NAME} • Android 17 / API 37 only")
                 Text("Live wallpaper support depends on Android, the system wallpaper service, and the device launcher.")
+                Divider()
+                Text("Privacy", style = MaterialTheme.typography.titleSmall)
+                Text("Your media stays on your device. Wallora stores local media references and editor preferences; it does not require an account or upload your wallpaper files.")
+                Text("Compatibility", style = MaterialTheme.typography.titleSmall)
+                Text("This build is designed exclusively for Android 17. Live wallpaper confirmation and codec support can vary by device firmware.")
             }
         }
         }
