@@ -2,6 +2,7 @@ package com.judson.wallora.wallpaper
 
 import android.graphics.Color
 import android.graphics.Movie
+import java.io.ByteArrayOutputStream
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -15,7 +16,8 @@ import kotlin.math.min
  * Animated GIF live wallpaper renderer.
  *
  * The GIF is decoded from the selected document URI and drawn into the wallpaper
- * surface on a paced frame loop. The platform's preview/confirmation UI remains
+ * surface on a paced frame loop. Files are capped at 32 MB and 16 megapixels
+ * before they are accepted. The platform's preview/confirmation UI remains
  * responsible for applying the wallpaper.
  */
 @Suppress("DEPRECATION")
@@ -93,8 +95,28 @@ class GifWallpaperService : WallpaperService() {
             }.getOrNull()
             if (declaredSize != null && declaredSize > MAX_GIF_BYTES) return
 
+            // Some document providers omit OpenableColumns.SIZE. Enforce the
+            // same cap while streaming so a missing size cannot trigger a huge allocation.
+            val encoded = runCatching {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    val output = ByteArrayOutputStream()
+                    val buffer = ByteArray(16 * 1024)
+                    var total = 0
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > MAX_GIF_BYTES) error("GIF exceeds the 32 MB safety limit.")
+                        output.write(buffer, 0, count)
+                    }
+                    output.toByteArray()
+                }
+            }.getOrElse {
+                movie = null
+                return
+            } ?: return
             val decoded = runCatching {
-                contentResolver.openInputStream(uri)?.use { Movie.decodeStream(it) }
+                Movie.decodeByteArray(encoded, 0, encoded.size)
             }.getOrNull()
             movie = decoded?.takeIf {
                 it.width() > 0 && it.height() > 0 &&
