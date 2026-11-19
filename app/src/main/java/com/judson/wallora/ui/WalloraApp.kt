@@ -373,7 +373,9 @@ private fun StudioScreen(
     var fill by remember(item?.uri) { mutableStateOf(editorPreferences.getBoolean(editorKey + "fill", true)) }
     var dim by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "dim", 0f)) }
     var rotation by remember(item?.uri) { mutableIntStateOf(editorPreferences.getInt(editorKey + "rotation", 0)) }
-    var studioPage by remember(item?.uri) { mutableStateOf("Adjust") }
+    var studioPage by remember(item?.uri) {
+        mutableStateOf(if (item?.kind == MediaKind.IMAGE) "Adjust" else "Playback")
+    }
     val videoPreferences = remember(context) {
         context.getSharedPreferences("wallora", Context.MODE_PRIVATE)
     }
@@ -492,6 +494,7 @@ private fun StudioScreen(
     }
 
     val selectedItem = item
+    val lifecycleOwner = LocalLifecycleOwner.current
     val videoPreviewPlayer = remember(selectedItem.uri) {
         if (selectedItem.kind == MediaKind.VIDEO) {
             ExoPlayer.Builder(context).build().apply {
@@ -511,7 +514,7 @@ private fun StudioScreen(
             playbackParameters = PlaybackParameters(videoSpeed)
         }
     }
-    DisposableEffect(videoPreviewPlayer) {
+    DisposableEffect(videoPreviewPlayer, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> videoPreviewPlayer?.pause()
@@ -519,10 +522,9 @@ private fun StudioScreen(
                 else -> Unit
             }
         }
-        val owner = context as? androidx.lifecycle.LifecycleOwner
-        owner?.lifecycle?.addObserver(observer)
+        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            owner?.lifecycle?.removeObserver(observer)
+            lifecycleOwner.lifecycle.removeObserver(observer)
             videoPreviewPlayer?.release()
         }
     }
