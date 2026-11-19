@@ -358,9 +358,11 @@ private fun StudioScreen(
     status: String,
     context: Context
 ) {
-    var fill by remember(item?.uri) { mutableStateOf(true) }
-    var dim by remember(item?.uri) { mutableFloatStateOf(0f) }
-    var rotation by remember(item?.uri) { mutableIntStateOf(0) }
+    val editorPreferences = remember(context) { context.getSharedPreferences("wallora_editor", Context.MODE_PRIVATE) }
+    val editorKey = remember(item?.uri) { "item_${item?.uri?.toString()?.hashCode() ?: 0}_" }
+    var fill by remember(item?.uri) { mutableStateOf(editorPreferences.getBoolean(editorKey + "fill", true)) }
+    var dim by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "dim", 0f)) }
+    var rotation by remember(item?.uri) { mutableIntStateOf(editorPreferences.getInt(editorKey + "rotation", 0)) }
     var studioPage by remember(item?.uri) { mutableStateOf("Adjust") }
     val videoPreferences = remember(context) {
         context.getSharedPreferences("wallora", Context.MODE_PRIVATE)
@@ -380,11 +382,22 @@ private fun StudioScreen(
     var videoSpeed by remember(item?.uri) {
         mutableFloatStateOf(videoPreferences.getFloat("video_speed", 1f).coerceIn(0.5f, 2f))
     }
-    var focusIndex by remember(item?.uri) { mutableIntStateOf(4) }
-    var brightness by remember(item?.uri) { mutableFloatStateOf(0f) }
-    var contrast by remember(item?.uri) { mutableFloatStateOf(1f) }
-    var saturation by remember(item?.uri) { mutableFloatStateOf(1f) }
+    var focusIndex by remember(item?.uri) { mutableIntStateOf(editorPreferences.getInt(editorKey + "focus", 4)) }
+    var brightness by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "brightness", 0f)) }
+    var contrast by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "contrast", 1f)) }
+    var saturation by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "saturation", 1f)) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(editorKey, fill, dim, rotation, focusIndex, brightness, contrast, saturation) {
+        editorPreferences.edit()
+            .putBoolean(editorKey + "fill", fill)
+            .putFloat(editorKey + "dim", dim)
+            .putInt(editorKey + "rotation", rotation)
+            .putInt(editorKey + "focus", focusIndex)
+            .putFloat(editorKey + "brightness", brightness)
+            .putFloat(editorKey + "contrast", contrast)
+            .putFloat(editorKey + "saturation", saturation)
+            .apply()
+    }
     val normalizedRotation = ((rotation % 360) + 360) % 360
     val rotatedFocusIndex = FOCAL_ROTATION_MAPS[normalizedRotation]?.get(focusIndex) ?: focusIndex
     val renderFocusPoint = FOCAL_COORDINATES[rotatedFocusIndex]
