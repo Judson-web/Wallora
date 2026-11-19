@@ -1,7 +1,7 @@
 # Wallora — Product & UI/UX Design Plan
 
 **Status:** Product and design blueprint  
-**Platform:** Android 17 / API 37 target, Android 8.0 / API 26 minimum baseline  
+**Platform:** Android 17 / API 37 only, minimum and target SDK  
 **Implementation direction:** Kotlin, Jetpack Compose, Material 3, local-first storage
 
 ---
@@ -53,6 +53,8 @@ Support System Dynamic Colour, Wallora colour, and neutral/monochrome options. D
 These are starting tokens, not hard-coded rules. Verify on small screens, landscape, large font scale, and large displays.
 
 ## 3. Information architecture
+
+**Implemented navigation direction:** The app targets API 37 exclusively. Compact navigation keeps Library, Studio, and Settings as primary destinations. Studio uses dedicated Placement, Adjust, and Apply pages for still images, and Playback and Apply pages for video/GIF. Settings is a hub that opens separate Storage, Appearance, and About screens. Editor adjustments are saved per media item so moving between pages or reopening a wallpaper preserves the draft.
 
 ### Primary navigation
 
