@@ -5,14 +5,14 @@
 - Android application ID: `app.wallora.premium`
 - Gradle namespace: `com.judson.wallora`
 - Target SDK: Android 17 / API 37
-- Minimum SDK: Android 8.0 / API 26
+- Minimum SDK: Android 17 / API 37
 - Language and UI: Kotlin, Jetpack Compose, Material 3
 
 ## Current app experience
 
 Wallora currently includes:
 
-- Three-section navigation: Library, Studio, and Settings.
+- Primary navigation for Library, Studio, and Settings, with dedicated multi-screen editor sections and separate Storage, Appearance, and About settings pages.
 - Multi-select media import through Android's system document picker.
 - A local library with image/video labels, image previews, extracted video-frame thumbnails, search, filters, favourites, and remove-from-library.
 - Persisted Storage Access Framework (SAF) permissions for individually selected media.
@@ -31,7 +31,7 @@ The still-image editor renders composition, focal position, rotation, brightness
 
 ## Design plan
 
-The product direction, screen layouts, interaction flows, visual system, accessibility requirements, storage model, and phased roadmap are documented in [docs/DESIGN_PLAN.md](docs/DESIGN_PLAN.md).
+The product direction, multi-screen layouts, interaction flows, visual system, accessibility requirements, storage model, and phased roadmap are documented in [docs/DESIGN_PLAN.md](docs/DESIGN_PLAN.md).
 
 ## Storage and privacy
 
