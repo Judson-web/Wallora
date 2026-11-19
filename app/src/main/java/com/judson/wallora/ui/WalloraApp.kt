@@ -847,6 +847,7 @@ private fun SettingsScreen(
     onStatus: (String) -> Unit,
     onMediaIndexed: (List<MediaItem>) -> Unit
 ) {
+    var page by remember { mutableStateOf("Home") }
     var folderUri by remember {
         mutableStateOf(
             context.getSharedPreferences("wallora_library", Context.MODE_PRIVATE)
@@ -884,11 +885,31 @@ private fun SettingsScreen(
         modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall)
-        Text(
-            "Control how Wallora looks and accesses your media.",
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (page != "Home") {
+                TextButton(onClick = { page = "Home" }) { Text("‹ Settings") }
+            }
+            Text(if (page == "Home") "Settings" else page,
+                style = MaterialTheme.typography.headlineSmall)
+        }
+        if (page == "Home") {
+            Text("Personalise your wallpaper experience and manage how Wallora works.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            listOf(
+                Triple("Storage", "Folders, full-device indexing and media permissions", "Manage your media sources"),
+                Triple("Appearance", "Theme, colour and interface preferences", "Personalise Wallora"),
+                Triple("About", "App information, privacy and platform details", "Wallora Premium")
+            ).forEach { entry ->
+                ElevatedCard(onClick = { page = entry.first }, modifier = Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(entry.first, style = MaterialTheme.typography.titleMedium)
+                        Text(entry.second, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        }
+        if (page == "Storage") {
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Storage and privacy", style = MaterialTheme.typography.titleMedium)
@@ -979,6 +1000,8 @@ private fun SettingsScreen(
                 )
             }
         }
+        }
+        if (page == "Appearance") {
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Appearance", style = MaterialTheme.typography.titleMedium)
@@ -995,6 +1018,8 @@ private fun SettingsScreen(
                 }
             }
         }
+        }
+        if (page == "About") {
         ElevatedCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("About Wallora", style = MaterialTheme.typography.titleMedium)
@@ -1002,6 +1027,7 @@ private fun SettingsScreen(
                 Text("Version 0.3.0 • Android 8.0+ baseline • Android 17 target")
                 Text("Live wallpaper support depends on Android, the system wallpaper service, and the device launcher.")
             }
+        }
         }
         Text(status, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
     }
