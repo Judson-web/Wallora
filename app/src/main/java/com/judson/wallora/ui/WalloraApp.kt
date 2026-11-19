@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.ColorMatrix as ComposeColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -53,6 +54,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
+import androidx.media3.common.MediaItem as PlayerMediaItem
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import com.judson.wallora.data.MediaItem
 import com.judson.wallora.data.MediaKind
 import com.judson.wallora.data.MediaLibraryStore
@@ -485,6 +492,40 @@ private fun StudioScreen(
     }
 
     val selectedItem = item
+    val videoPreviewPlayer = remember(selectedItem.uri) {
+        if (selectedItem.kind == MediaKind.VIDEO) {
+            ExoPlayer.Builder(context).build().apply {
+                setMediaItem(PlayerMediaItem.fromUri(selectedItem.uri))
+                repeatMode = if (videoLoop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                volume = if (videoMuted) 0f else 1f
+                playbackParameters = PlaybackParameters(videoSpeed)
+                prepare()
+                playWhenReady = true
+            }
+        } else null
+    }
+    LaunchedEffect(videoPreviewPlayer, videoLoop, videoMuted, videoSpeed) {
+        videoPreviewPlayer?.apply {
+            repeatMode = if (videoLoop) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+            volume = if (videoMuted) 0f else 1f
+            playbackParameters = PlaybackParameters(videoSpeed)
+        }
+    }
+    DisposableEffect(videoPreviewPlayer) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> videoPreviewPlayer?.pause()
+                Lifecycle.Event.ON_RESUME -> videoPreviewPlayer?.play()
+                else -> Unit
+            }
+        }
+        val owner = context as? androidx.lifecycle.LifecycleOwner
+        owner?.lifecycle?.addObserver(observer)
+        onDispose {
+            owner?.lifecycle?.removeObserver(observer)
+            videoPreviewPlayer?.release()
+        }
+    }
     fun applyEdited(target: Int) {
         onStatus("Rendering wallpaper…")
         scope.launch {
@@ -529,27 +570,23 @@ private fun StudioScreen(
                 .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             if (selectedItem.kind == MediaKind.VIDEO) {
-                AsyncImage(
-                    model = selectedItem.uri,
-                    contentDescription = "Video wallpaper first-frame preview",
+                AndroidView(
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = if (videoFill) ContentScale.Crop else ContentScale.Fit
-                )
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Rounded.Movie, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Live video wallpaper")
+                    factory = { viewContext ->
+                        PlayerView(viewContext).apply {
+                            player = videoPreviewPlayer
+                            useController = true
+                            controllerAutoShow = true
+                            resizeMode = if (videoFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                                else AspectRatioFrameLayout.RESIZE_MODE_FIT
                         }
+                    },
+                    update = { playerView ->
+                        playerView.player = videoPreviewPlayer
+                        playerView.resizeMode = if (videoFill) AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            else AspectRatioFrameLayout.RESIZE_MODE_FIT
                     }
-                }
+                )
             } else {
                 BoxWithConstraints(Modifier.fillMaxSize()) {
                     val imageModifier = if (normalizedRotation == 90 || normalizedRotation == 270) {
