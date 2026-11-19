@@ -47,7 +47,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import coil.compose.AsyncImage
@@ -881,6 +883,7 @@ private fun SettingsScreen(
     }
     var scanning by remember { mutableStateOf(false) }
     var scanProgress by remember { mutableIntStateOf(0) }
+    var scanJob by remember { mutableStateOf<Job?>(null) }
     var hasAllFiles by remember { mutableStateOf(hasFullStorageAccess(context)) }
     val scope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -957,7 +960,7 @@ private fun SettingsScreen(
                         onClick = {
                             val selectedTree = folderUri
                             if (selectedTree != null) {
-                                scope.launch {
+                                scanJob = scope.launch {
                                     scanning = true
                                     try {
                                         val found = withContext(Dispatchers.IO) {
@@ -965,10 +968,13 @@ private fun SettingsScreen(
                                         }
                                         onMediaIndexed(found)
                                         onStatus("Folder scan complete: ${found.size} supported media item(s) found.")
+                                    } catch (cancelled: CancellationException) {
+                                        onStatus("Folder scan cancelled.")
                                     } catch (error: Exception) {
                                         onStatus("Folder scan failed: ${error.message ?: "unknown error"}")
                                     } finally {
                                         scanning = false
+                                        scanJob = null
                                     }
                                 }
                             }
@@ -997,7 +1003,7 @@ private fun SettingsScreen(
                 }
                 Button(
                     onClick = {
-                        scope.launch {
+                        scanJob = scope.launch {
                             scanning = true
                             scanProgress = 0
                             try {
@@ -1006,10 +1012,13 @@ private fun SettingsScreen(
                                 }
                                 onMediaIndexed(found)
                                 onStatus("Storage scan complete: ${found.size} supported media item(s) indexed.")
+                            } catch (cancelled: CancellationException) {
+                                onStatus("Storage scan cancelled.")
                             } catch (error: Exception) {
                                 onStatus("Storage scan failed: ${error.message ?: "unknown error"}")
                             } finally {
                                 scanning = false
+                                scanJob = null
                             }
                         }
                     },
@@ -1017,6 +1026,12 @@ private fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (scanning) "Scanning… $scanProgress found" else "Scan all accessible storage")
+                }
+                if (scanning) {
+                    OutlinedButton(onClick = { scanJob?.cancel() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Cancel scan")
+                    }
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
                 Text(
                     "This Android 17 build can index shared storage after you enable All files access. Android itself still blocks protected app-private Android/data and Android/obb folders. Your selected folders remain available as a separate access method.",
