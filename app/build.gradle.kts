@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "app.wallora.premium"
-        minSdk = 26
+        minSdk = 37
         targetSdk = 37
         versionCode = 3
         versionName = "0.3.0"
