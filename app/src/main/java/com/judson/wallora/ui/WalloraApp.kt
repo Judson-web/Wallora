@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -367,20 +368,21 @@ private fun StudioScreen(
     val videoPreferences = remember(context) {
         context.getSharedPreferences("wallora", Context.MODE_PRIVATE)
     }
+    val mediaPreferenceKey = remember(item?.uri) { "media_${item?.uri?.toString()?.hashCode() ?: 0}_" }
     var gifFill by remember(item?.uri) {
-        mutableStateOf(videoPreferences.getBoolean("gif_fill", true))
+        mutableStateOf(videoPreferences.getBoolean(mediaPreferenceKey + "gif_fill", true))
     }
     var videoMuted by remember(item?.uri) {
-        mutableStateOf(videoPreferences.getBoolean("video_muted", true))
+        mutableStateOf(videoPreferences.getBoolean(mediaPreferenceKey + "video_muted", true))
     }
     var videoLoop by remember(item?.uri) {
-        mutableStateOf(videoPreferences.getBoolean("video_loop", true))
+        mutableStateOf(videoPreferences.getBoolean(mediaPreferenceKey + "video_loop", true))
     }
     var videoFill by remember(item?.uri) {
-        mutableStateOf(videoPreferences.getBoolean("video_fill", true))
+        mutableStateOf(videoPreferences.getBoolean(mediaPreferenceKey + "video_fill", true))
     }
     var videoSpeed by remember(item?.uri) {
-        mutableFloatStateOf(videoPreferences.getFloat("video_speed", 1f).coerceIn(0.5f, 2f))
+        mutableFloatStateOf(videoPreferences.getFloat(mediaPreferenceKey + "video_speed", 1f).coerceIn(0.5f, 2f))
     }
     var focusIndex by remember(item?.uri) { mutableIntStateOf(editorPreferences.getInt(editorKey + "focus", 4)) }
     var brightness by remember(item?.uri) { mutableFloatStateOf(editorPreferences.getFloat(editorKey + "brightness", 0f)) }
@@ -731,7 +733,7 @@ private fun StudioScreen(
                     checked = videoMuted,
                     onCheckedChange = {
                         videoMuted = it
-                        videoPreferences.edit().putBoolean("video_muted", it).apply()
+                        videoPreferences.edit().putBoolean(mediaPreferenceKey + "video_muted", it).apply()
                     }
                 )
             }
@@ -743,7 +745,7 @@ private fun StudioScreen(
                 }
                 Switch(checked = videoLoop, onCheckedChange = {
                     videoLoop = it
-                    videoPreferences.edit().putBoolean("video_loop", it).apply()
+                    videoPreferences.edit().putBoolean(mediaPreferenceKey + "video_loop", it).apply()
                 })
             }
             Text("Video framing", style = MaterialTheme.typography.bodyMedium)
@@ -752,7 +754,7 @@ private fun StudioScreen(
                     selected = videoFill,
                     onClick = {
                         videoFill = true
-                        videoPreferences.edit().putBoolean("video_fill", true).apply()
+                        videoPreferences.edit().putBoolean(mediaPreferenceKey + "video_fill", true).apply()
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                 ) { Text("Fill") }
@@ -760,7 +762,7 @@ private fun StudioScreen(
                     selected = !videoFill,
                     onClick = {
                         videoFill = false
-                        videoPreferences.edit().putBoolean("video_fill", false).apply()
+                        videoPreferences.edit().putBoolean(mediaPreferenceKey + "video_fill", false).apply()
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) { Text("Fit") }
@@ -770,7 +772,7 @@ private fun StudioScreen(
                 value = videoSpeed,
                 onValueChange = { videoSpeed = it },
                 onValueChangeFinished = {
-                    videoPreferences.edit().putFloat("video_speed", videoSpeed).apply()
+                    videoPreferences.edit().putFloat(mediaPreferenceKey + "video_speed", videoSpeed).apply()
                 },
                 valueRange = 0.5f..2f,
                 steps = 5
@@ -820,7 +822,7 @@ private fun StudioScreen(
                     selected = gifFill,
                     onClick = {
                         gifFill = true
-                        videoPreferences.edit().putBoolean("gif_fill", true).apply()
+                        videoPreferences.edit().putBoolean(mediaPreferenceKey + "gif_fill", true).apply()
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                 ) { Text("Fill") }
@@ -828,7 +830,7 @@ private fun StudioScreen(
                     selected = !gifFill,
                     onClick = {
                         gifFill = false
-                        videoPreferences.edit().putBoolean("gif_fill", false).apply()
+                        videoPreferences.edit().putBoolean(mediaPreferenceKey + "gif_fill", false).apply()
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) { Text("Fit") }
@@ -910,6 +912,7 @@ private fun SettingsScreen(
     onMediaIndexed: (List<MediaItem>) -> Unit
 ) {
     var page by remember { mutableStateOf("Home") }
+    BackHandler(enabled = page != "Home") { page = "Home" }
     var folderUri by remember {
         mutableStateOf(
             context.getSharedPreferences("wallora_library", Context.MODE_PRIVATE)
