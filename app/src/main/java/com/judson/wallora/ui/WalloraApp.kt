@@ -579,14 +579,19 @@ private fun StudioScreen(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { OutlinedButton(onClick = { compareOriginal = !compareOriginal }, modifier = Modifier.weight(1f)) { Text(if (compareOriginal) "Show edits" else "Before / after") }; OutlinedButton(onClick = { zoom = 1f; panX = 0f; panY = 0f; saveHistory() }, modifier = Modifier.weight(1f)) { Text("Reset view") } }
+        if (selectedItem.kind == MediaKind.IMAGE) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { compareOriginal = !compareOriginal }, modifier = Modifier.weight(1f)) { Text(if (compareOriginal) "Show edits" else "Before / after") }
+                OutlinedButton(onClick = { zoom = 1f; panX = 0f; panY = 0f; saveHistory() }, modifier = Modifier.weight(1f)) { Text("Reset view") }
+            }
+        }
         Box(
             Modifier.fillMaxWidth().aspectRatio(
                 (context.resources.displayMetrics.widthPixels.toFloat() /
                     context.resources.displayMetrics.heightPixels.toFloat()).coerceIn(0.3f, 1.8f)
             ).clip(RoundedCornerShape(24.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .pointerInput(selectedItem.uri) { detectTransformGestures { _, pan, zoomChange, _ -> if (selectedItem.kind == MediaKind.IMAGE && !compareOriginal) { zoom = (zoom * zoomChange).coerceIn(1f, 4f); panX = (panX + pan.x / size.width.coerceAtLeast(1)).coerceIn(-1f, 1f); panY = (panY + pan.y / size.height.coerceAtLeast(1)).coerceIn(-1f, 1f) } } }
+                .then(if (selectedItem.kind == MediaKind.IMAGE) Modifier.pointerInput(selectedItem.uri) { detectTransformGestures { _, pan, zoomChange, _ -> if (!compareOriginal) { zoom = (zoom * zoomChange).coerceIn(1f, 4f); panX = (panX + pan.x / size.width.coerceAtLeast(1)).coerceIn(-1f, 1f); panY = (panY + pan.y / size.height.coerceAtLeast(1)).coerceIn(-1f, 1f) } } } else Modifier)
         ) {
             if (selectedItem.kind == MediaKind.VIDEO) {
                 AndroidView(
