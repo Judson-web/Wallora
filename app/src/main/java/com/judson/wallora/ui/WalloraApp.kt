@@ -875,7 +875,7 @@ private fun SettingsScreen(
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("About Wallora", style = MaterialTheme.typography.titleMedium)
                 Text("Wallora Premium • app.wallora.premium")
-                Text("Version 0.1.0 • Android 8.0+ baseline • Android 17 target")
+                Text("Version 0.2.0 • Android 8.0+ baseline • Android 17 target")
                 Text("Live wallpaper support depends on Android, the system wallpaper service, and the device launcher.")
             }
         }
