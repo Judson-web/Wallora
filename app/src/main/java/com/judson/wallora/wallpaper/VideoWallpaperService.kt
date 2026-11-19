@@ -55,7 +55,7 @@ class VideoWallpaperService : WallpaperService() {
             player = exo
             exo.setVideoSurface(holder.surface)
             exo.setMediaItem(MediaItem.fromUri(uriString))
-            exo.repeatMode = Player.REPEAT_MODE_ONE
+            exo.repeatMode = if (prefs.getBoolean("video_loop", true)) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
             exo.videoScalingMode = if (prefs.getBoolean("video_fill", true)) {
                 C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
             } else {
