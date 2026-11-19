@@ -58,7 +58,8 @@ object MediaRepository {
      * Recursively indexes supported media inside a user-granted SAF folder.
      * It traverses nested folders without an arbitrary media-count ceiling.
      */
-    fun scanTree(context: Context, treeUri: Uri): List<MediaItem> {
+    suspend fun scanTree(context: Context, treeUri: Uri): List<MediaItem> {
+        val coroutineContext = currentCoroutineContext()
         val root = DocumentFile.fromTreeUri(context, treeUri)
             ?: error("The selected folder is no longer available.")
         check(root.canRead()) { "Wallora no longer has access to this folder." }
@@ -68,8 +69,8 @@ object MediaRepository {
             if (depth > 32) return
             val children = runCatching { directory.listFiles() }.getOrDefault(emptyArray())
             children.forEach { child ->
+                coroutineContext.ensureActive()
                 val name = child.name ?: return@forEach
-                if (name.startsWith(".") && child.isDirectory) return@forEach
                 when {
                     child.isDirectory -> visit(child, depth + 1)
                     child.isFile -> {
@@ -134,7 +135,6 @@ object MediaRepository {
         roots.values.forEach(pending::addLast)
         val visitedDirectories = HashSet<String>()
         val indexed = LinkedHashMap<String, MediaItem>()
-        var checkedFiles = 0
 
         while (pending.isNotEmpty()) {
             coroutineContext.ensureActive()
@@ -151,9 +151,11 @@ object MediaRepository {
                 }
                 if (!child.isFile || !child.canRead()) continue
                 val extension = child.extension.lowercase()
-                if (extension !in SUPPORTED_EXTENSIONS) continue
+                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension)
+                if (extension !in SUPPORTED_EXTENSIONS &&
+                    mime?.startsWith("image/") != true && mime?.startsWith("video/") != true
+                ) continue
 
-                checkedFiles += 1
                 val item = runCatching { fromFile(child) }.getOrNull()
                     ?.takeIf { it.kind != MediaKind.UNKNOWN } ?: continue
                 indexed[item.uri.toString()] = item
