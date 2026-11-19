@@ -777,36 +777,8 @@ private fun StudioScreen(
                 valueRange = 0.5f..2f,
                 steps = 5
             )
-            Button(onClick = {
-                videoPreferences.edit()
-                    .putString("active_video_uri", selectedItem.uri.toString())
-                    .putBoolean("video_muted", videoMuted)
-                    .putBoolean("video_loop", videoLoop)
-                    .putBoolean("video_fill", videoFill)
-                    .putFloat("video_speed", videoSpeed)
-                    .apply()
-                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                    putExtra(
-                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                        ComponentName(context, VideoWallpaperService::class.java)
-                    )
-                }
-                runCatching { context.startActivity(intent) }
-                    .onFailure {
-                        onStatus("Live wallpaper preview is unavailable on this device. Try the system chooser.")
-                    }
-            }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Rounded.Movie, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Preview live wallpaper in Android")
-            }
-            OutlinedButton(onClick = {
-                runCatching {
-                    context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER))
-                }.onFailure { onStatus("This device does not expose the live wallpaper chooser.") }
-            }, modifier = Modifier.fillMaxWidth()) { Text("Open system wallpaper chooser") }
             Text(
-                "Looping is enabled. Updated settings are read when the Android live-wallpaper preview starts.",
+                "Playback settings are saved for this wallpaper and applied when you open the Apply page.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -834,26 +806,6 @@ private fun StudioScreen(
                     },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) { Text("Fit") }
-            }
-            Button(onClick = {
-                videoPreferences.edit()
-                    .putString("active_gif_uri", selectedItem.uri.toString())
-                    .putBoolean("gif_fill", gifFill)
-                    .apply()
-                val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                    putExtra(
-                        WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                        ComponentName(context, GifWallpaperService::class.java)
-                    )
-                }
-                runCatching { context.startActivity(intent) }
-                    .onFailure {
-                        onStatus("Animated GIF preview is unavailable on this device. Try the system chooser.")
-                    }
-            }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Rounded.Image, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text("Preview animated wallpaper in Android")
             }
             Text(
                 "Large or high-frame-rate GIFs may consume more memory and battery.",
