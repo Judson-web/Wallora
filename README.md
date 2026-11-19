@@ -17,10 +17,11 @@ Wallora currently includes:
 - A local library with image/video labels, image previews, extracted video-frame thumbnails, search, filters, favourites, and remove-from-library.
 - Persisted Storage Access Framework (SAF) permissions for individually selected media.
 - Recursive SAF folder indexing without an artificial file-count ceiling.
-- Full shared-storage indexing across readable internal and removable volumes after Android All files access is granted, with live scan feedback and cancellation. The scan is cancellable, de-duplicates mounted paths, and includes nested media folders while respecting Android-protected app-private directories.
+- Full shared-storage indexing across readable internal and removable volumes after Android All files access is granted, with live scan feedback and cancellation. The scanner de-duplicates mounted paths, and includes nested media folders while respecting Android-protected app-private directories.
 - Library sorting by recently added, name in either direction, media type, and favourites first.
 - A still-image editor with Fill/Fit composition, a 3×3 focal-position grid, quarter-turn rotation, brightness, contrast, saturation, and a dim overlay.
 - Screen-shaped JPEG rendering, export through Android's Create Document flow, and direct application of the rendered result to Home, Lock, or both.
+- An in-editor playable video preview with native playback controls and live synchronization of mute, loop, framing, and speed settings.
 - A video live-wallpaper service with looping, mute/unmute, Fill/Fit framing, and 0.5×–2× playback speed.
 - An animated GIF library preview and a looping GIF live-wallpaper service with Fill/Fit framing. GIF decoding is capped at 32 MB and 16 megapixels.
 - A sideload-oriented All files access flow with a live permission-state refresh and a full-storage scan action. Core document-picker import and SAF folder scanning still work without this special permission.
